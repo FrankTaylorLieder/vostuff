@@ -65,3 +65,32 @@
 - README provides clear path for new developers to get up and running
 - Documentation includes both CLI usage and library integration examples
 
+## 2025-09-23 - Sample Data Generator
+
+**Prompt:** Let's create some sample data to load into the DB for testing purposes. We'll have two organisations: Coke and Pepsi. Each will have a user: Bob in Coke, Alice in Pepsi. Can you create a set of 50 sample items for each user in their collection, ensuring that all types and options are covered in the DB schema.
+
+**Claude's Response:**
+- Created standalone binary load-sample-data in src/bin/load_sample_data.rs
+- Implemented comprehensive sample data generator that creates:
+  - 2 organizations (Coke and Pepsi) with full metadata
+  - 2 users (Bob@Coke, Alice@Pepsi) with organization memberships
+  - 4 locations per organization (Living Room, Bedroom, Storage Unit, Office)
+  - 4 collections per organization (Jazz, Rock, Reference Books, Rare Items)
+  - 6 tags per organization (vintage, rare, mint-condition, signed, limited-edition, favorite)
+  - 50 items per organization with distribution:
+    - 10 vinyl records with all size/speed/channel/grading combinations
+    - 10 CDs with varying disk counts
+    - 8 cassettes
+    - 8 books
+    - 6 musical scores
+    - 4 electronics items
+    - 4 miscellaneous items
+  - All item states represented (42 current, 3 loaned, 2 missing, 3 disposed per org)
+  - Type-specific details properly populated (vinyl_details, cd_details, cassette_details)
+  - State-specific details (loan dates, missing dates, disposal dates)
+  - Items linked to collections and tags for realistic relationships
+- Fixed sqlx compile-time checking issues by using non-macro query() for custom PostgreSQL types
+- Successfully tested data loading - verified 50 items per org with proper distribution
+- Updated README.md with sample data loading instructions
+- Sample data provides comprehensive test coverage of all schema features
+

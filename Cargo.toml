@@ -14,3 +14,7 @@ clap = { version = "4.0", features = ["derive", "env"] }
 [[bin]]
 name = "schema-manager"
 path = "src/bin/schema_manager.rs"
+
+[[bin]]
+name = "load-sample-data"
+path = "src/bin/load_sample_data.rs"

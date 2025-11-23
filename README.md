@@ -69,7 +69,22 @@ cargo run --bin schema-manager migrate
 
 This creates all tables, indexes, triggers, and the initial SYSTEM organization.
 
-### 5. Verify Setup
+### 5. Load Sample Data (Optional)
+
+To test the application with sample data, run:
+
+```bash
+cargo run --bin load-sample-data
+```
+
+This creates:
+- 2 organizations (Coke and Pepsi)
+- 2 users (Bob@Coke, Alice@Pepsi)
+- 50 items per organization covering all item types (vinyl, CD, cassette, book, score, electronics, misc)
+- Various item states (current, loaned, missing, disposed)
+- Collections, tags, and locations for each organization
+
+### 6. Verify Setup
 
 Check that the database is running and healthy:
 
@@ -111,6 +126,9 @@ cargo run --bin schema-manager reset
 
 # Create database only (no migrations)
 cargo run --bin schema-manager create
+
+# Load sample data for testing
+cargo run --bin load-sample-data
 ```
 
 ### Testing and Quality
