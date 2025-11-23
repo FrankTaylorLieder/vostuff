@@ -94,3 +94,79 @@
 - Updated README.md with sample data loading instructions
 - Sample data provides comprehensive test coverage of all schema features
 
+## 2025-09-23 - REST API with OpenAPI Documentation
+
+**Prompt:** Now let's create the REST API. What's the best way to document a REST API for developers to use? [User chose option 1: Set up the REST API with OpenAPI/utoipa documentation built-in]
+
+**Claude's Response:**
+- Recommended OpenAPI/Swagger with utoipa crate for Rust/Axum integration
+- Added dependencies: axum, tower, tower-http, utoipa, utoipa-swagger-ui, tracing
+- Created comprehensive API models in src/api/models.rs:
+  - DTOs with consistent snake_case serde serialization
+  - OpenAPI schemas using utoipa::ToSchema
+  - Type-safe enums for item types, states, vinyl details, and grading
+  - Request/response models for all operations
+  - Pagination support with PaginatedResponse
+  - Error response model for consistent error handling
+- Implemented full CRUD handlers:
+  - Items (src/api/handlers/items.rs): List with pagination, Get, Create, Update (partial), Delete
+  - Locations (src/api/handlers/locations.rs): List, Create, Delete
+  - Collections (src/api/handlers/collections.rs): List, Create, Delete
+  - Tags (src/api/handlers/tags.rs): List, Create, Delete
+- Created API server binary (src/bin/api_server.rs):
+  - Axum web server on port 3000
+  - Auto-generated OpenAPI specification
+  - Interactive Swagger UI at /swagger-ui
+  - RESTful routes under /api namespace
+  - Organization-scoped endpoints for multi-tenant isolation
+  - Tracing/logging with configurable log levels
+  - CORS support via tower-http
+- All endpoints documented with utoipa::path macros including:
+  - Path parameters and query parameters
+  - Request/response schemas
+  - HTTP status codes
+  - Tag grouping for organization
+- Fixed sqlx FromRow issues by adding derive macros to Location, Collection, Tag models
+- Fixed utoipa IntoParams for PaginationParams
+- Successfully compiled API server
+- Updated README.md with:
+  - REST API feature in implemented list
+  - API server commands
+  - Complete endpoint documentation
+  - Example curl commands for testing
+  - OpenAPI/Swagger UI access instructions
+  - Architecture status showing API layer complete
+- Project now has two of three tiers complete (Database ✅, API ✅, UI pending)
+
+## 2025-11-23 - Integration Tests and Test Utilities Refactoring
+
+**Prompt:** Can you move the sample data creation to an integration test module. Keep the binary to load sample data, but calling the integration test code. Then can you add a set of API integration tests in the new test module to exercise the API.
+
+**Claude's Response:**
+- Refactored sample data loading into reusable test utilities:
+  - Created src/test_utils.rs with SampleDataLoader struct and SampleDataResult
+  - Made sample data loading logic available to both binary and tests
+  - Updated src/lib.rs to include test_utils module
+  - Refactored src/bin/load_sample_data.rs to use test_utils (reduced from 584 to 19 lines)
+  - Created tests/common/mod.rs as re-export layer for test utilities
+- Implemented comprehensive API integration tests (tests/api_tests.rs):
+  - 16 test cases covering all API endpoints
+  - Test helper function create_test_router() for consistent test setup
+  - Test helper function setup_test_db() that resets database and loads sample data
+  - Items tests: list (with pagination), get, create, update, delete, not found
+  - Locations tests: list, create, delete
+  - Collections tests: list, create, delete
+  - Tags tests: list, create, delete
+  - Multi-tenant isolation test (verifies orgs can't access each other's data)
+  - All tests use Axum's oneshot request testing pattern
+- Fixed compilation issues:
+  - Added Deserialize trait to PaginatedResponse<T> in src/api/models.rs
+  - Tests run with DATABASE_URL environment variable
+- Successfully ran all 16 tests with 100% pass rate in 5.5 seconds
+- Updated README.md with comprehensive integration testing documentation:
+  - Added integration test commands to Testing section
+  - Created new "Integration Tests" section explaining test structure and coverage
+  - Documented 16 test cases and what they verify
+  - Explained sample data utilities are shared between CLI and tests
+- All tests properly isolated with --test-threads=1 to avoid database conflicts
+- Test coverage includes error cases, pagination, CRUD operations, and multi-tenant isolation

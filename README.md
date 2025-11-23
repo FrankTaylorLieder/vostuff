@@ -14,12 +14,19 @@ A three-tier Rust application for tracking collections of stuff - vinyl records,
   - Comprehensive audit logging
 - **Schema Management**: CLI tool and reusable library for database migrations
 - **Docker Development Environment**: Containerized PostgreSQL for easy local development
+- **Sample Data Generator**: Load realistic test data with 100+ items across two organizations
+- **REST API**: Full-featured API built with Axum
+  - CRUD endpoints for items, locations, collections, and tags
+  - Organization-scoped operations
+  - Pagination support
+  - Interactive OpenAPI/Swagger documentation at `/swagger-ui`
+  - Type-safe request/response models
+  - Comprehensive error handling
 
 ### Planned
-- REST API (Axum)
 - Web UI (Leptos with SSR)
 - OIDC Authentication
-- Session Management
+- Session Management and JWT tokens
 
 ## Prerequisites
 
@@ -131,11 +138,27 @@ cargo run --bin schema-manager create
 cargo run --bin load-sample-data
 ```
 
+### API Server
+
+```bash
+# Run the REST API server
+cargo run --bin api-server
+
+# The server will start on http://localhost:3000
+# Swagger UI available at http://localhost:3000/swagger-ui
+```
+
 ### Testing and Quality
 
 ```bash
 # Run all tests
 cargo test
+
+# Run integration tests only
+cargo test --test api_tests
+
+# Run integration tests with proper isolation (one at a time)
+cargo test --test api_tests -- --test-threads=1
 
 # Run specific test
 cargo test <test_name>
@@ -225,6 +248,118 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
+## REST API
+
+The REST API is built with Axum and provides comprehensive OpenAPI/Swagger documentation.
+
+### Starting the API Server
+
+```bash
+# Make sure database is running
+docker-compose up -d
+
+# Start the API server
+cargo run --bin api-server
+```
+
+The server starts on `http://localhost:3000` with interactive API documentation at `http://localhost:3000/swagger-ui`.
+
+### API Endpoints
+
+All endpoints are scoped to an organization to enforce multi-tenant isolation:
+
+**Items**
+- `GET /api/organizations/{org_id}/items` - List items (with pagination)
+- `POST /api/organizations/{org_id}/items` - Create an item
+- `GET /api/organizations/{org_id}/items/{item_id}` - Get item details
+- `PATCH /api/organizations/{org_id}/items/{item_id}` - Update an item
+- `DELETE /api/organizations/{org_id}/items/{item_id}` - Delete an item
+
+**Locations**
+- `GET /api/organizations/{org_id}/locations` - List locations
+- `POST /api/organizations/{org_id}/locations` - Create a location
+- `DELETE /api/organizations/{org_id}/locations/{location_id}` - Delete a location
+
+**Collections**
+- `GET /api/organizations/{org_id}/collections` - List collections
+- `POST /api/organizations/{org_id}/collections` - Create a collection
+- `DELETE /api/organizations/{org_id}/collections/{collection_id}` - Delete a collection
+
+**Tags**
+- `GET /api/organizations/{org_id}/tags` - List tags
+- `POST /api/organizations/{org_id}/tags` - Create a tag
+- `DELETE /api/organizations/{org_id}/tags/{tag_name}` - Delete a tag
+
+### Example API Usage
+
+```bash
+# Get Coke organization ID from sample data
+ORG_ID=$(docker exec vostuff-postgres psql -U vostuff -d vostuff_dev -t -c "SELECT id FROM organizations WHERE name='Coke'")
+
+# List items for Coke organization
+curl "http://localhost:3000/api/organizations/${ORG_ID}/items?page=1&per_page=10"
+
+# Create a new item
+curl -X POST "http://localhost:3000/api/organizations/${ORG_ID}/items" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "item_type": "vinyl",
+    "name": "Dark Side of the Moon",
+    "description": "Pink Floyd classic album"
+  }'
+```
+
+### OpenAPI Documentation
+
+Visit `http://localhost:3000/swagger-ui` for:
+- Interactive API exploration
+- Request/response schemas
+- Try out API calls directly from the browser
+- Download OpenAPI specification
+
+## Integration Tests
+
+The project includes comprehensive integration tests that exercise all API endpoints. The tests:
+
+- **Automatically set up and tear down test databases** for each test run
+- **Load sample data** using the same utilities as the load-sample-data binary
+- **Test all CRUD operations** for items, locations, collections, and tags
+- **Verify pagination** works correctly
+- **Test error cases** (404s, invalid requests)
+- **Verify multi-tenant isolation** (organizations cannot access each other's data)
+
+### Running Integration Tests
+
+```bash
+# Run all integration tests
+cargo test --test api_tests
+
+# Run with proper isolation (recommended)
+cargo test --test api_tests -- --test-threads=1
+
+# Run a specific test
+cargo test --test api_tests test_list_items
+```
+
+### Test Coverage
+
+The integration tests cover:
+- 16 comprehensive test cases
+- Items: List (with pagination), Get, Create, Update, Delete
+- Locations: List, Create, Delete
+- Collections: List, Create, Delete
+- Tags: List, Create, Delete
+- Multi-tenant isolation verification
+- Error handling (404 responses)
+
+### Sample Data Utilities
+
+The sample data loading functionality is now shared between:
+- `cargo run --bin load-sample-data` - CLI tool for loading data into a development database
+- Integration tests - Automatically loads clean data for each test run
+
+Both use the same `SampleDataLoader` from `src/test_utils.rs`, ensuring consistency.
+
 ## Contributing
 
 This project follows specific development workflows documented in `CLAUDE.md`. Key points:
@@ -239,7 +374,7 @@ This project follows specific development workflows documented in `CLAUDE.md`. K
 VOStuff is designed as a three-tier application:
 
 1. **Database Layer** (PostgreSQL) - ✅ Complete
-2. **API Layer** (Axum REST API) - 🚧 Planned
+2. **API Layer** (Axum REST API) - ✅ Complete
 3. **UI Layer** (Leptos SSR) - 🚧 Planned
 
 ### Multi-Tenancy
