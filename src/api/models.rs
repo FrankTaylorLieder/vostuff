@@ -166,7 +166,7 @@ pub struct CreateTagRequest {
 }
 
 // Organization
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
 pub struct Organization {
     pub id: Uuid,
     pub name: String,
@@ -175,14 +175,46 @@ pub struct Organization {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateOrganizationRequest {
+    pub name: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateOrganizationRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+}
+
 // User
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
 pub struct User {
     pub id: Uuid,
     pub name: String,
     pub identity: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateUserRequest {
+    pub name: String,
+    pub identity: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateUserRequest {
+    pub name: Option<String>,
+    pub identity: Option<String>,
+}
+
+// User organization membership
+#[derive(Debug, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
+pub struct UserOrganization {
+    pub user_id: Uuid,
+    pub organization_id: Uuid,
+    pub created_at: DateTime<Utc>,
 }
 
 // Error response

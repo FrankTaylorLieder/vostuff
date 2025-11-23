@@ -18,6 +18,8 @@ A three-tier Rust application for tracking collections of stuff - vinyl records,
 - **REST API**: Full-featured API built with Axum
   - CRUD endpoints for items, locations, collections, and tags
   - Organization-scoped operations
+  - Admin endpoints for managing users and organizations
+  - User-organization membership management
   - Pagination support
   - Interactive OpenAPI/Swagger documentation at `/swagger-ui`
   - Type-safe request/response models
@@ -266,7 +268,9 @@ The server starts on `http://localhost:8080` with interactive API documentation 
 
 ### API Endpoints
 
-All endpoints are scoped to an organization to enforce multi-tenant isolation:
+#### Organization-Scoped Endpoints
+
+All organization-scoped endpoints enforce multi-tenant isolation:
 
 **Items**
 - `GET /api/organizations/{org_id}/items` - List items (with pagination)
@@ -290,7 +294,32 @@ All endpoints are scoped to an organization to enforce multi-tenant isolation:
 - `POST /api/organizations/{org_id}/tags` - Create a tag
 - `DELETE /api/organizations/{org_id}/tags/{tag_name}` - Delete a tag
 
+#### Admin Endpoints
+
+Admin endpoints for platform-level management of users and organizations:
+
+**Organizations**
+- `GET /api/admin/organizations` - List all organizations
+- `POST /api/admin/organizations` - Create a new organization
+- `GET /api/admin/organizations/{org_id}` - Get organization details
+- `PATCH /api/admin/organizations/{org_id}` - Update an organization
+- `DELETE /api/admin/organizations/{org_id}` - Delete an organization
+
+**Users**
+- `GET /api/admin/users` - List all users
+- `POST /api/admin/users` - Create a new user
+- `GET /api/admin/users/{user_id}` - Get user details
+- `PATCH /api/admin/users/{user_id}` - Update a user
+- `DELETE /api/admin/users/{user_id}` - Delete a user
+
+**User-Organization Memberships**
+- `GET /api/admin/users/{user_id}/organizations` - List organizations for a user
+- `POST /api/admin/users/{user_id}/organizations/{org_id}` - Add user to organization
+- `DELETE /api/admin/users/{user_id}/organizations/{org_id}` - Remove user from organization
+
 ### Example API Usage
+
+#### Organization-Scoped Operations
 
 ```bash
 # Get Coke organization ID from sample data
@@ -307,6 +336,39 @@ curl -X POST "http://localhost:8080/api/organizations/${ORG_ID}/items" \
     "name": "Dark Side of the Moon",
     "description": "Pink Floyd classic album"
   }'
+```
+
+#### Admin Operations
+
+```bash
+# List all organizations
+curl "http://localhost:8080/api/admin/organizations"
+
+# Create a new organization
+curl -X POST "http://localhost:8080/api/admin/organizations" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "New Org",
+    "description": "A new organization"
+  }'
+
+# List all users
+curl "http://localhost:8080/api/admin/users"
+
+# Create a new user
+curl -X POST "http://localhost:8080/api/admin/users" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Jane Doe",
+    "identity": "jane@example.com"
+  }'
+
+# Add user to organization
+USER_ID=$(docker exec vostuff-postgres psql -U vostuff -d vostuff_dev -t -c "SELECT id FROM users WHERE name='Jane Doe'")
+curl -X POST "http://localhost:8080/api/admin/users/${USER_ID}/organizations/${ORG_ID}"
+
+# List organizations for a user
+curl "http://localhost:8080/api/admin/users/${USER_ID}/organizations"
 ```
 
 ### OpenAPI Documentation
@@ -344,13 +406,16 @@ cargo test --test api_tests test_list_items
 ### Test Coverage
 
 The integration tests cover:
-- 16 comprehensive test cases
+- 27 comprehensive test cases
 - Items: List (with pagination), Get, Create, Update, Delete
 - Locations: List, Create, Delete
 - Collections: List, Create, Delete
 - Tags: List, Create, Delete
+- Organizations (Admin): List, Get, Create, Update, Delete
+- Users (Admin): List, Create, Update
+- User-Organization Memberships (Admin): List, Add, Remove
 - Multi-tenant isolation verification
-- Error handling (404 responses)
+- Error handling (404 responses, 409 conflicts)
 
 ### Sample Data Utilities
 

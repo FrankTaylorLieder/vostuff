@@ -40,6 +40,22 @@ fn create_test_router(pool: PgPool) -> Router {
         .route("/api/organizations/:org_id/tags", get(vostuff::api::handlers::tags::list_tags))
         .route("/api/organizations/:org_id/tags", post(vostuff::api::handlers::tags::create_tag))
         .route("/api/organizations/:org_id/tags/:tag_name", delete(vostuff::api::handlers::tags::delete_tag))
+        // Admin - Organizations
+        .route("/api/admin/organizations", get(vostuff::api::handlers::organizations::list_organizations))
+        .route("/api/admin/organizations", post(vostuff::api::handlers::organizations::create_organization))
+        .route("/api/admin/organizations/:org_id", get(vostuff::api::handlers::organizations::get_organization))
+        .route("/api/admin/organizations/:org_id", patch(vostuff::api::handlers::organizations::update_organization))
+        .route("/api/admin/organizations/:org_id", delete(vostuff::api::handlers::organizations::delete_organization))
+        // Admin - Users
+        .route("/api/admin/users", get(vostuff::api::handlers::users::list_users))
+        .route("/api/admin/users", post(vostuff::api::handlers::users::create_user))
+        .route("/api/admin/users/:user_id", get(vostuff::api::handlers::users::get_user))
+        .route("/api/admin/users/:user_id", patch(vostuff::api::handlers::users::update_user))
+        .route("/api/admin/users/:user_id", delete(vostuff::api::handlers::users::delete_user))
+        // Admin - User Organizations
+        .route("/api/admin/users/:user_id/organizations", get(vostuff::api::handlers::users::list_user_organizations))
+        .route("/api/admin/users/:user_id/organizations/:org_id", post(vostuff::api::handlers::users::add_user_to_organization))
+        .route("/api/admin/users/:user_id/organizations/:org_id", delete(vostuff::api::handlers::users::remove_user_from_organization))
         .with_state(state)
 }
 
@@ -603,6 +619,407 @@ async fn test_delete_tag() {
             Request::builder()
                 .method("DELETE")
                 .uri(format!("/api/organizations/{}/tags/{}", coke_org_id, tag.name))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+    pool.close().await;
+}
+
+// ==================== Admin Organization Tests ====================
+
+#[tokio::test]
+async fn test_admin_list_organizations() {
+    let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/admin/organizations")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let organizations: Vec<Organization> = serde_json::from_slice(&body).unwrap();
+
+    // Should include at least Coke, Pepsi, and SYSTEM organizations
+    assert!(organizations.len() >= 3);
+    assert!(organizations.iter().any(|o| o.name == "Coke"));
+    assert!(organizations.iter().any(|o| o.name == "Pepsi"));
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_admin_create_organization() {
+    let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    let new_org = json!({
+        "name": "Test Company",
+        "description": "A test organization"
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/admin/organizations")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&new_org).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let organization: Organization = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(organization.name, "Test Company");
+    assert_eq!(organization.description, Some("A test organization".to_string()));
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_admin_get_organization() {
+    let (pool, coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/admin/organizations/{}", coke_org_id))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let organization: Organization = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(organization.id, coke_org_id);
+    assert_eq!(organization.name, "Coke");
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_admin_update_organization() {
+    let (pool, coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    let update_data = json!({
+        "name": "Coca-Cola International",
+        "description": "Updated description"
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/api/admin/organizations/{}", coke_org_id))
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&update_data).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let organization: Organization = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(organization.name, "Coca-Cola International");
+    assert_eq!(organization.description, Some("Updated description".to_string()));
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_admin_delete_organization() {
+    let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    // First create an organization to delete
+    let new_org = json!({
+        "name": "Temp Organization"
+    });
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/admin/organizations")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&new_org).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let body = axum::body::to_bytes(create_response.into_body(), usize::MAX).await.unwrap();
+    let organization: Organization = serde_json::from_slice(&body).unwrap();
+
+    // Now delete it
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/api/admin/organizations/{}", organization.id))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+    pool.close().await;
+}
+
+// ==================== Admin User Tests ====================
+
+#[tokio::test]
+async fn test_admin_list_users() {
+    let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/admin/users")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let users: Vec<User> = serde_json::from_slice(&body).unwrap();
+
+    // Should include at least Bob and Alice
+    assert!(users.len() >= 2);
+    assert!(users.iter().any(|u| u.name == "Bob"));
+    assert!(users.iter().any(|u| u.name == "Alice"));
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_admin_create_user() {
+    let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    let new_user = json!({
+        "name": "Charlie",
+        "identity": "charlie@example.com"
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/admin/users")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&new_user).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let user: User = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(user.name, "Charlie");
+    assert_eq!(user.identity, "charlie@example.com");
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_admin_update_user() {
+    let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    // First get Bob's ID
+    let list_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/admin/users")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let body = axum::body::to_bytes(list_response.into_body(), usize::MAX).await.unwrap();
+    let users: Vec<User> = serde_json::from_slice(&body).unwrap();
+    let bob = users.iter().find(|u| u.name == "Bob").unwrap();
+
+    // Update Bob
+    let update_data = json!({
+        "name": "Robert"
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/api/admin/users/{}", bob.id))
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&update_data).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let user: User = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(user.name, "Robert");
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_admin_list_user_organizations() {
+    let (pool, coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    // First get Bob's ID
+    let list_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/admin/users")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let body = axum::body::to_bytes(list_response.into_body(), usize::MAX).await.unwrap();
+    let users: Vec<User> = serde_json::from_slice(&body).unwrap();
+    let bob = users.iter().find(|u| u.name == "Bob").unwrap();
+
+    // Get Bob's organizations
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/admin/users/{}/organizations", bob.id))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let organizations: Vec<Organization> = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(organizations.len(), 1);
+    assert_eq!(organizations[0].id, coke_org_id);
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_admin_add_user_to_organization() {
+    let (pool, _coke_org_id, pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    // Get Bob's ID
+    let list_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/admin/users")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let body = axum::body::to_bytes(list_response.into_body(), usize::MAX).await.unwrap();
+    let users: Vec<User> = serde_json::from_slice(&body).unwrap();
+    let bob = users.iter().find(|u| u.name == "Bob").unwrap();
+
+    // Add Bob to Pepsi organization
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/admin/users/{}/organizations/{}", bob.id, pepsi_org_id))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let user_org: UserOrganization = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(user_org.user_id, bob.id);
+    assert_eq!(user_org.organization_id, pepsi_org_id);
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_admin_remove_user_from_organization() {
+    let (pool, coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    // Get Bob's ID
+    let list_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/admin/users")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let body = axum::body::to_bytes(list_response.into_body(), usize::MAX).await.unwrap();
+    let users: Vec<User> = serde_json::from_slice(&body).unwrap();
+    let bob = users.iter().find(|u| u.name == "Bob").unwrap();
+
+    // Remove Bob from Coke organization
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/api/admin/users/{}/organizations/{}", bob.id, coke_org_id))
                 .body(Body::empty())
                 .unwrap(),
         )

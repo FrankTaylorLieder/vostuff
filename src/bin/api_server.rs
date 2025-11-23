@@ -10,7 +10,7 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use vostuff::api::{
-    handlers::{collections, items, locations, tags},
+    handlers::{collections, items, locations, organizations, tags, users},
     models::*,
     state::AppState,
 };
@@ -36,6 +36,21 @@ use vostuff::api::{
         tags::list_tags,
         tags::create_tag,
         tags::delete_tag,
+        // Admin - Organizations
+        organizations::list_organizations,
+        organizations::get_organization,
+        organizations::create_organization,
+        organizations::update_organization,
+        organizations::delete_organization,
+        // Admin - Users
+        users::list_users,
+        users::get_user,
+        users::create_user,
+        users::update_user,
+        users::delete_user,
+        users::list_user_organizations,
+        users::add_user_to_organization,
+        users::remove_user_from_organization,
     ),
     components(
         schemas(
@@ -45,7 +60,9 @@ use vostuff::api::{
             Location, CreateLocationRequest,
             Collection, CreateCollectionRequest,
             Tag, CreateTagRequest,
-            Organization, User,
+            Organization, CreateOrganizationRequest, UpdateOrganizationRequest,
+            User, CreateUserRequest, UpdateUserRequest,
+            UserOrganization,
             ErrorResponse,
             PaginationParams, PaginatedResponse<Item>,
         )
@@ -54,7 +71,9 @@ use vostuff::api::{
         (name = "items", description = "Item management endpoints"),
         (name = "locations", description = "Location management endpoints"),
         (name = "collections", description = "Collection management endpoints"),
-        (name = "tags", description = "Tag management endpoints")
+        (name = "tags", description = "Tag management endpoints"),
+        (name = "admin-organizations", description = "Admin endpoints for managing organizations"),
+        (name = "admin-users", description = "Admin endpoints for managing users")
     ),
     info(
         title = "VOStuff API",
@@ -108,6 +127,22 @@ async fn main() -> anyhow::Result<()> {
         .route("/organizations/:org_id/tags", get(tags::list_tags))
         .route("/organizations/:org_id/tags", post(tags::create_tag))
         .route("/organizations/:org_id/tags/:tag_name", delete(tags::delete_tag))
+        // Admin - Organizations
+        .route("/admin/organizations", get(organizations::list_organizations))
+        .route("/admin/organizations", post(organizations::create_organization))
+        .route("/admin/organizations/:org_id", get(organizations::get_organization))
+        .route("/admin/organizations/:org_id", patch(organizations::update_organization))
+        .route("/admin/organizations/:org_id", delete(organizations::delete_organization))
+        // Admin - Users
+        .route("/admin/users", get(users::list_users))
+        .route("/admin/users", post(users::create_user))
+        .route("/admin/users/:user_id", get(users::get_user))
+        .route("/admin/users/:user_id", patch(users::update_user))
+        .route("/admin/users/:user_id", delete(users::delete_user))
+        // Admin - User Organizations
+        .route("/admin/users/:user_id/organizations", get(users::list_user_organizations))
+        .route("/admin/users/:user_id/organizations/:org_id", post(users::add_user_to_organization))
+        .route("/admin/users/:user_id/organizations/:org_id", delete(users::remove_user_from_organization))
         .with_state(state);
 
     // Build main app with Swagger UI

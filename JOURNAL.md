@@ -170,3 +170,54 @@
   - Explained sample data utilities are shared between CLI and tests
 - All tests properly isolated with --test-threads=1 to avoid database conflicts
 - Test coverage includes error cases, pagination, CRUD operations, and multi-tenant isolation
+
+## 2025-11-23 - Admin API Endpoints for Users and Organizations
+
+**Prompt:** Can you now add admin API routes for managing users and organisations. Follow the same pattern as the existing API. [Followed by:] Instead of manually testing, can you add organisation and user tests so the integration test suite.
+
+**Claude's Response:**
+- Implemented complete admin API functionality for managing users and organizations:
+  - Added admin request/response models to src/api/models.rs:
+    - CreateOrganizationRequest, UpdateOrganizationRequest for organization management
+    - CreateUserRequest, UpdateUserRequest for user management
+    - UserOrganization model for user-organization memberships
+    - Added sqlx::FromRow derives to Organization and User structs
+  - Created src/api/handlers/organizations.rs with 5 CRUD endpoints:
+    - list_organizations: GET /api/admin/organizations
+    - get_organization: GET /api/admin/organizations/{org_id}
+    - create_organization: POST /api/admin/organizations
+    - update_organization: PATCH /api/admin/organizations/{org_id}
+    - delete_organization: DELETE /api/admin/organizations/{org_id}
+  - Created src/api/handlers/users.rs with 8 endpoints:
+    - list_users: GET /api/admin/users
+    - get_user: GET /api/admin/users/{user_id}
+    - create_user: POST /api/admin/users
+    - update_user: PATCH /api/admin/users/{user_id}
+    - delete_user: DELETE /api/admin/users/{user_id}
+    - list_user_organizations: GET /api/admin/users/{user_id}/organizations
+    - add_user_to_organization: POST /api/admin/users/{user_id}/organizations/{org_id}
+    - remove_user_from_organization: DELETE /api/admin/users/{user_id}/organizations/{org_id}
+  - Updated src/api/handlers/mod.rs to include new handler modules
+  - Updated src/bin/api_server.rs:
+    - Added all admin endpoints to OpenAPI paths documentation
+    - Registered all admin routes in the router
+    - Added new schemas and tags to OpenAPI specification
+  - All endpoints use dynamic query building for partial updates
+  - Proper error handling with 404 for not found, 409 for conflicts
+  - All endpoints tagged with "admin-organizations" or "admin-users" for OpenAPI organization
+- Implemented comprehensive integration tests (tests/api_tests.rs):
+  - Added 11 new test cases covering all admin endpoints
+  - Organization tests: list, get, create, update, delete
+  - User tests: list, create, update
+  - User-organization membership tests: list, add, remove
+  - Updated create_test_router() to match api_server.rs routes exactly
+  - All tests use same patterns as existing API tests
+- Successfully ran all 27 tests (16 original + 11 new admin tests) with 100% pass rate in 9.32 seconds
+- Updated README.md and JOURNAL.md with comprehensive admin API documentation:
+  - Added admin endpoints section to API documentation
+  - Included example curl commands for admin operations
+  - Updated test coverage numbers from 16 to 27 tests
+  - Documented all new admin endpoints and their purposes
+- Admin API provides complete platform management capabilities for users and organizations
+- All admin routes follow RESTful conventions and existing code patterns
+- API server now includes interactive Swagger UI documentation at http://localhost:8080/swagger-ui with admin endpoints visible
