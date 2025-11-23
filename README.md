@@ -144,8 +144,8 @@ cargo run --bin load-sample-data
 # Run the REST API server
 cargo run --bin api-server
 
-# The server will start on http://localhost:3000
-# Swagger UI available at http://localhost:3000/swagger-ui
+# The server will start on http://localhost:8080
+# Swagger UI available at http://localhost:8080/swagger-ui
 ```
 
 ### Testing and Quality
@@ -262,7 +262,7 @@ docker-compose up -d
 cargo run --bin api-server
 ```
 
-The server starts on `http://localhost:3000` with interactive API documentation at `http://localhost:3000/swagger-ui`.
+The server starts on `http://localhost:8080` with interactive API documentation at `http://localhost:8080/swagger-ui`.
 
 ### API Endpoints
 
@@ -297,10 +297,10 @@ All endpoints are scoped to an organization to enforce multi-tenant isolation:
 ORG_ID=$(docker exec vostuff-postgres psql -U vostuff -d vostuff_dev -t -c "SELECT id FROM organizations WHERE name='Coke'")
 
 # List items for Coke organization
-curl "http://localhost:3000/api/organizations/${ORG_ID}/items?page=1&per_page=10"
+curl "http://localhost:8080/api/organizations/${ORG_ID}/items?page=1&per_page=10"
 
 # Create a new item
-curl -X POST "http://localhost:3000/api/organizations/${ORG_ID}/items" \
+curl -X POST "http://localhost:8080/api/organizations/${ORG_ID}/items" \
   -H "Content-Type: application/json" \
   -d '{
     "item_type": "vinyl",
@@ -311,7 +311,7 @@ curl -X POST "http://localhost:3000/api/organizations/${ORG_ID}/items" \
 
 ### OpenAPI Documentation
 
-Visit `http://localhost:3000/swagger-ui` for:
+Visit `http://localhost:8080/swagger-ui` for:
 - Interactive API exploration
 - Request/response schemas
 - Try out API calls directly from the browser

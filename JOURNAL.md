@@ -114,7 +114,7 @@
   - Collections (src/api/handlers/collections.rs): List, Create, Delete
   - Tags (src/api/handlers/tags.rs): List, Create, Delete
 - Created API server binary (src/bin/api_server.rs):
-  - Axum web server on port 3000
+  - Axum web server on port 8080 (initially 3000, changed due to Rancher Desktop conflict)
   - Auto-generated OpenAPI specification
   - Interactive Swagger UI at /swagger-ui
   - RESTful routes under /api namespace
