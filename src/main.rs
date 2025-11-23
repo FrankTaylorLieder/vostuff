@@ -1,3 +1,5 @@
+
 fn main() {
-    println!("Hello, world!");
+    println!("VOStuff - Stuff tracking application");
+    println!("Use 'cargo run --bin schema-manager' to manage the database schema");
 }

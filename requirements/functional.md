@@ -29,22 +29,27 @@ one) when using the API or UI.
     - Name: short name of the item, used for display purposes
     - Description: longer description of the item
     - Notes: Markdown formatted notes related to the item
+    - Location: Current location of the item, one of a set of defined
+    locations. See below.
     - Collections: reference to one or more collection that this item belongs
     to
     - Tags: List of zero or more tags associated with this item
     - Orgnisation: ID of the Organisation to which this item belongs
 - D2 Each item has a type.
 - D3 The following item types are to be implemented, some with additional
-related data fields (only vinyl currently has additional fields):
+related data fields (only some types have additional fields):
     - Vinyl
         - Size, one of: 12 inch, 6 inch, other
         - Speed, one of: 33, 45, other
         - Channels, one of: mono, stereo, surround, other
         - Disks, non-zero integer
         - Media grading, one of: Mint, Near mint, Excellent, Good, Fair, Poor
-        - Sleeve grading, one of: Mint, Near mint, Excellent, Good, Fair, Poor
+        - Sleeve grading, one of: Mint, Near mint, Excellent, Good, Fair,
+        Poor
     - CD
+        - Disks, non-zero integer
     - Cassette
+        - Cassettes, non-zero integer
     - Book
     - Score
     - Electronics
@@ -74,6 +79,10 @@ fields:
     - DISPOSED: indicates that the item has been disposed of, with the
     following fields:
         - Date disposed
+- D11 An item can be moved between any state.
+- D10 Locations are user created and consist of:
+    - ID: UUID
+    - Name: short string, used for display
 - D7 Organisations are defined by the following fields:
     - ID: UUID
     - Name: short name of the organisation, used for display purposes
@@ -91,7 +100,9 @@ model should be tracked in an Audit table.
         - ID: UUID
         - ID of item
         - Date of change
-        - Details of change
+        - Details of change: A text summary of the changes made to the item.
+- D12 A minimal set of fields need to be indexed to start with. We can add
+additional indexes as needed.
 
 ## API
 
@@ -104,13 +115,17 @@ be used for the session.
 - A4 APIs are needed to CRUD all the data items.
 - A5 Item, collection and tag data are owned by specific organisations and can
 only be operated upon in sessions with that organisation.
-- A6 Organisation and user data is owned by the SYSTEM orgnisation and only be
-operated upon in sessions with at organisation.
+- A6 Organisation and user data is owned by the SYSTEM orgnisation and can only
+be operated upon in sessions with that organisation.
+- A10 To start with users are added to the system and associated with
+organisations by an admin (member of the SYSTEM organisation).
 - A7 The API needs to support an OIDC authentication flow.
 - A8 When creating a session token (login), the API needs to support a flow
-where the user can select from their available orgnisations and then resubmit
+where the user can select from their available organisations and then resubmit
 the identity token and orgnisation ID to get their session (authorisation)
 token.
+- A9 Session tokens should have a maximum lifetime of 12 hours. After this time
+a new login request needs to be made. We may change this behaviour in future.
 
 ## UI
 

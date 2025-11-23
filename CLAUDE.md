@@ -17,6 +17,12 @@ of.
 - `cargo run` - Build and run the application
 - `cargo build --release` - Build optimized release version
 
+### Database
+- `docker-compose up -d` - Start PostgreSQL database
+- `docker-compose down` - Stop PostgreSQL database
+- `cargo run --bin schema-manager migrate` - Run database migrations
+- `cargo run --bin schema-manager reset` - Reset database (drops all data)
+
 ### Testing and Quality
 - `cargo test` - Run all tests
 - `cargo test <test_name>` - Run a specific test
@@ -47,6 +53,24 @@ The three tiers are contained in this one repository with the REST API and Web
 tier being two separate Rust binary applications. Any DB initialisation, data
 import and migration tools must be written in Rust and will be separate
 binaries.
+
+## Development Workflow
+
+Follow this checklist for every Claude Code session:
+
+### During Development
+- [ ] Use TodoWrite tool to track multi-step tasks
+- [ ] Follow existing code conventions and patterns
+- [ ] Run tests after making changes: `cargo test`
+- [ ] Check code quality: `cargo clippy` and `cargo fmt`
+- [ ] Update TODO.md with any new identified work
+
+### After Significant Work
+- [ ] Mark completed todos as done in TODO.md
+- [ ] Update JOURNAL.md proactively when substantial work is completed containing:
+    - Date and time
+    - The prompt(s) - in full
+    - Summary of Claude's response and work completed
 
 ## Standing instructions
 
