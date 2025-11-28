@@ -195,6 +195,56 @@ pub async fn delete_organization(
     }
 }
 
+/// List users in an organization
+#[utoipa::path(
+    get,
+    path = "/api/admin/organizations/{org_id}/users",
+    params(
+        ("org_id" = Uuid, Path, description = "Organization ID")
+    ),
+    responses(
+        (status = 200, description = "List of users in organization", body = Vec<crate::api::models::User>),
+        (status = 404, description = "Organization not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "admin-organizations"
+)]
+pub async fn list_organization_users(
+    State(state): State<AppState>,
+    Path(org_id): Path<Uuid>,
+) -> Result<Json<Vec<crate::api::models::User>>, (StatusCode, Json<ErrorResponse>)> {
+    // First check if organization exists
+    let org_exists = sqlx::query("SELECT id FROM organizations WHERE id = $1")
+        .bind(org_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(internal_error)?;
+
+    if org_exists.is_none() {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "not_found".to_string(),
+                message: "Organization not found".to_string(),
+            }),
+        ));
+    }
+
+    let users = sqlx::query_as::<_, crate::api::models::User>(
+        "SELECT u.id, u.name, u.identity, u.created_at, u.updated_at
+         FROM users u
+         INNER JOIN user_organizations uo ON u.id = uo.user_id
+         WHERE uo.organization_id = $1
+         ORDER BY u.name"
+    )
+    .bind(org_id)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(internal_error)?;
+
+    Ok(Json(users))
+}
+
 fn internal_error<E: std::fmt::Display>(err: E) -> (StatusCode, Json<ErrorResponse>) {
     (
         StatusCode::INTERNAL_SERVER_ERROR,

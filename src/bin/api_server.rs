@@ -42,6 +42,7 @@ use vostuff::api::{
         organizations::create_organization,
         organizations::update_organization,
         organizations::delete_organization,
+        organizations::list_organization_users,
         // Admin - Users
         users::list_users,
         users::get_user,
@@ -133,6 +134,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/admin/organizations/:org_id", get(organizations::get_organization))
         .route("/admin/organizations/:org_id", patch(organizations::update_organization))
         .route("/admin/organizations/:org_id", delete(organizations::delete_organization))
+        .route("/admin/organizations/:org_id/users", get(organizations::list_organization_users))
         // Admin - Users
         .route("/admin/users", get(users::list_users))
         .route("/admin/users", post(users::create_user))

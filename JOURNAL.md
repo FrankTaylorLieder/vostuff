@@ -221,3 +221,31 @@
 - Admin API provides complete platform management capabilities for users and organizations
 - All admin routes follow RESTful conventions and existing code patterns
 - API server now includes interactive Swagger UI documentation at http://localhost:8080/swagger-ui with admin endpoints visible
+
+## 2025-11-28 - Extended Admin API to List Users in Organization
+
+**Prompt:** Can you extend the admin API to list users in an org.
+
+**Claude's Response:**
+- Discovered the list_organization_users function was already implemented in src/api/handlers/organizations.rs:198-246
+- Found the endpoint was missing from routing and OpenAPI documentation
+- Added the missing route /api/admin/organizations/{org_id}/users to:
+  - Main API server (src/bin/api_server.rs:136)
+  - Test router (tests/api_tests.rs:49)
+  - OpenAPI paths documentation (src/bin/api_server.rs:45)
+- Fixed OpenAPI type reference for User model in the endpoint documentation
+- Implemented 2 comprehensive integration tests:
+  - test_admin_list_organization_users() - Tests successful listing of users in an org
+  - test_admin_list_organization_users_not_found() - Tests 404 when org doesn't exist
+- Resolved SQLx compile-time validation issues:
+  - Modified src/lib.rs to conditionally include test_utils module
+  - Started PostgreSQL database using docker-compose
+  - Successfully ran database migrations using schema-manager
+  - Generated SQLx query cache using cargo sqlx prepare
+- Successfully ran all 29 integration tests (27 existing + 2 new) with 100% pass rate in 15.08 seconds
+- The endpoint follows existing patterns:
+  - Proper error handling (404 if organization doesn't exist)
+  - Multi-tenant isolation (organization-scoped)
+  - Consistent JSON response format
+  - OpenAPI documentation integration
+- Endpoint URL: GET /api/admin/organizations/{org_id}/users returns array of User objects belonging to the specified organization

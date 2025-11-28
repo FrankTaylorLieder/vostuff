@@ -46,6 +46,7 @@ fn create_test_router(pool: PgPool) -> Router {
         .route("/api/admin/organizations/:org_id", get(vostuff::api::handlers::organizations::get_organization))
         .route("/api/admin/organizations/:org_id", patch(vostuff::api::handlers::organizations::update_organization))
         .route("/api/admin/organizations/:org_id", delete(vostuff::api::handlers::organizations::delete_organization))
+        .route("/api/admin/organizations/:org_id/users", get(vostuff::api::handlers::organizations::list_organization_users))
         // Admin - Users
         .route("/api/admin/users", get(vostuff::api::handlers::users::list_users))
         .route("/api/admin/users", post(vostuff::api::handlers::users::create_user))
@@ -1027,6 +1028,61 @@ async fn test_admin_remove_user_from_organization() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_admin_list_organization_users() {
+    let (pool, coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/admin/organizations/{}/users", coke_org_id))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let users: Vec<User> = serde_json::from_slice(&body).unwrap();
+
+    // Coke org should have Bob
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].name, "Bob");
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_admin_list_organization_users_not_found() {
+    let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    let fake_org_id = Uuid::new_v4();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/admin/organizations/{}/users", fake_org_id))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let error: ErrorResponse = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(error.error, "not_found");
+    assert_eq!(error.message, "Organization not found");
 
     pool.close().await;
 }
