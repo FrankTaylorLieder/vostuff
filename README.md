@@ -56,7 +56,15 @@ cp .env.example .env
 The default configuration connects to the Docker PostgreSQL instance:
 ```
 DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev
+JWT_SECRET=your_secret_key_here_change_in_production
 ```
+
+**Important Security Notes:**
+- `DATABASE_URL`: Connection string for PostgreSQL database
+- `JWT_SECRET`: Secret key for signing JWT authentication tokens
+  - **MUST be changed in production** to a strong, randomly generated secret
+  - Used for signing and validating JWT tokens for user authentication
+  - If not set, defaults to a development-only secret (insecure for production)
 
 ### 3. Start the Database
 
@@ -316,6 +324,18 @@ Admin endpoints for platform-level management of users and organizations:
 - `GET /api/admin/users/{user_id}/organizations` - List organizations for a user
 - `POST /api/admin/users/{user_id}/organizations/{org_id}` - Add user to organization
 - `DELETE /api/admin/users/{user_id}/organizations/{org_id}` - Remove user from organization
+- `GET /api/admin/organizations/{org_id}/users` - List users in an organization
+
+#### Authentication Endpoints
+
+Authentication endpoints for user login and JWT token management:
+
+**Login**
+- `POST /api/auth/login` - User login with password authentication
+  - Request: `{"identity": "user@example.com", "password": "password"}`
+  - Response: `{"token": "jwt_token", "expires_in": 86400, "user": {...}}`
+  - Returns JWT token valid for 24 hours
+  - Provides user info and organization memberships
 
 ### Example API Usage
 

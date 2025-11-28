@@ -193,6 +193,8 @@ pub struct User {
     pub id: Uuid,
     pub name: String,
     pub identity: String,
+    #[serde(skip_serializing)] // Never serialize password hash
+    pub password_hash: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -201,12 +203,38 @@ pub struct User {
 pub struct CreateUserRequest {
     pub name: String,
     pub identity: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateUserRequest {
     pub name: Option<String>,
     pub identity: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+}
+
+// Authentication models
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct LoginRequest {
+    pub identity: String,
+    pub password: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LoginResponse {
+    pub token: String,
+    pub expires_in: i64, // seconds
+    pub user: UserInfo,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UserInfo {
+    pub id: Uuid,
+    pub name: String,
+    pub identity: String,
+    pub organizations: Vec<Organization>,
 }
 
 // User organization membership

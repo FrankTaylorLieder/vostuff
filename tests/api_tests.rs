@@ -19,7 +19,7 @@ use common::SampleDataLoader;
 fn create_test_router(pool: PgPool) -> Router {
     use axum::routing::{delete, get, patch, post};
 
-    let state = AppState::new(pool);
+    let state = AppState::new(pool, "test_jwt_secret".to_string());
 
     Router::new()
         // Items
@@ -57,6 +57,8 @@ fn create_test_router(pool: PgPool) -> Router {
         .route("/api/admin/users/:user_id/organizations", get(vostuff::api::handlers::users::list_user_organizations))
         .route("/api/admin/users/:user_id/organizations/:org_id", post(vostuff::api::handlers::users::add_user_to_organization))
         .route("/api/admin/users/:user_id/organizations/:org_id", delete(vostuff::api::handlers::users::remove_user_from_organization))
+        // Authentication
+        .route("/api/auth/login", post(vostuff::api::handlers::auth::login))
         .with_state(state)
 }
 
@@ -1083,6 +1085,156 @@ async fn test_admin_list_organization_users_not_found() {
 
     assert_eq!(error.error, "not_found");
     assert_eq!(error.message, "Organization not found");
+
+    pool.close().await;
+}
+
+// ==================== Authentication Tests ====================
+
+#[tokio::test]
+async fn test_auth_login_success() {
+    let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    // First create a user with a password
+    let new_user = serde_json::json!({
+        "name": "Test User",
+        "identity": "testuser@example.com",
+        "password": "testpassword123"
+    });
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/admin/users")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&new_user).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+
+    // Now try to login
+    let login_request = serde_json::json!({
+        "identity": "testuser@example.com",
+        "password": "testpassword123"
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/login")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&login_request).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let login_response: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    // Check that we got a token and user info
+    assert!(login_response["token"].is_string());
+    assert_eq!(login_response["expires_in"], 86400); // 24 hours
+    assert_eq!(login_response["user"]["identity"], "testuser@example.com");
+    assert_eq!(login_response["user"]["name"], "Test User");
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_auth_login_invalid_credentials() {
+    let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    let login_request = serde_json::json!({
+        "identity": "nonexistent@example.com",
+        "password": "wrongpassword"
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/login")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&login_request).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let error: ErrorResponse = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(error.error, "unauthorized");
+    assert_eq!(error.message, "Invalid credentials");
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_auth_login_user_without_password() {
+    let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    // Create a user without a password
+    let new_user = serde_json::json!({
+        "name": "No Password User",
+        "identity": "nopassword@example.com"
+    });
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/admin/users")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&new_user).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+
+    // Try to login - should fail with same "Invalid credentials" message
+    let login_request = serde_json::json!({
+        "identity": "nopassword@example.com",
+        "password": "anypassword"
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/login")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&login_request).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let error: ErrorResponse = serde_json::from_slice(&body).unwrap();
+
+    // Should get same generic error message to prevent user enumeration
+    assert_eq!(error.error, "unauthorized");
+    assert_eq!(error.message, "Invalid credentials");
 
     pool.close().await;
 }

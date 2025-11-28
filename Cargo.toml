@@ -19,6 +19,11 @@ utoipa = { version = "5.0", features = ["axum_extras", "chrono", "uuid"] }
 utoipa-swagger-ui = { version = "8.0", features = ["axum"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Authentication dependencies
+argon2 = "0.5"
+jsonwebtoken = "9.0"
+axum-extra = { version = "0.9", features = ["typed-header"] }
+headers = "0.4"
 
 [[bin]]
 name = "schema-manager"

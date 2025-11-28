@@ -1,4 +1,5 @@
 use axum::{
+    middleware,
     routing::{delete, get, patch, post},
     Router,
 };
@@ -10,7 +11,8 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use vostuff::api::{
-    handlers::{collections, items, locations, organizations, tags, users},
+    handlers::{auth, collections, items, locations, organizations, tags, users},
+    middleware::auth_middleware,
     models::*,
     state::AppState,
 };
@@ -52,6 +54,8 @@ use vostuff::api::{
         users::list_user_organizations,
         users::add_user_to_organization,
         users::remove_user_from_organization,
+        // Authentication
+        auth::login,
     ),
     components(
         schemas(
@@ -64,6 +68,7 @@ use vostuff::api::{
             Organization, CreateOrganizationRequest, UpdateOrganizationRequest,
             User, CreateUserRequest, UpdateUserRequest,
             UserOrganization,
+            LoginRequest, LoginResponse, UserInfo,
             ErrorResponse,
             PaginationParams, PaginatedResponse<Item>,
         )
@@ -74,7 +79,8 @@ use vostuff::api::{
         (name = "collections", description = "Collection management endpoints"),
         (name = "tags", description = "Tag management endpoints"),
         (name = "admin-organizations", description = "Admin endpoints for managing organizations"),
-        (name = "admin-users", description = "Admin endpoints for managing users")
+        (name = "admin-users", description = "Admin endpoints for managing users"),
+        (name = "auth", description = "Authentication endpoints")
     ),
     info(
         title = "VOStuff API",
@@ -98,15 +104,18 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Get database URL
+    // Get database URL and JWT secret
     let database_url = env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev".to_string());
+
+    let jwt_secret = env::var("JWT_SECRET")
+        .unwrap_or_else(|_| "dev_secret_key_change_in_production".to_string());
 
     tracing::info!("Connecting to database: {}", database_url);
     let pool = PgPool::connect(&database_url).await?;
 
     // Create app state
-    let state = AppState::new(pool);
+    let state = AppState::new(pool, jwt_secret);
 
     // Build API router
     let api_router = Router::new()
@@ -145,7 +154,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/admin/users/:user_id/organizations", get(users::list_user_organizations))
         .route("/admin/users/:user_id/organizations/:org_id", post(users::add_user_to_organization))
         .route("/admin/users/:user_id/organizations/:org_id", delete(users::remove_user_from_organization))
-        .with_state(state);
+        // Authentication (public endpoint)
+        .route("/auth/login", post(auth::login))
+        .with_state(state.clone())
+        // Add auth middleware to extract tokens from headers
+        .layer(middleware::from_fn_with_state(state, auth_middleware));
 
     // Build main app with Swagger UI
     let app = Router::new()
