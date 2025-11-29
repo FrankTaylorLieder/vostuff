@@ -24,7 +24,7 @@ use crate::auth::PasswordHasher;
 pub async fn list_users(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<User>>, (StatusCode, Json<ErrorResponse>)> {
-    let users = sqlx::query_as::<_, User>("SELECT id, name, identity, password_hash, created_at, updated_at FROM users ORDER BY name")
+    let users = sqlx::query_as::<_, User>("SELECT id, name, identity, password_hash, roles, created_at, updated_at FROM users ORDER BY name")
         .fetch_all(&state.pool)
         .await
         .map_err(internal_error)?;
@@ -51,7 +51,7 @@ pub async fn get_user(
     Path(user_id): Path<Uuid>,
 ) -> Result<Json<User>, (StatusCode, Json<ErrorResponse>)> {
     let user = sqlx::query_as::<_, User>(
-        "SELECT id, name, identity, password_hash, created_at, updated_at FROM users WHERE id = $1"
+        "SELECT id, name, identity, password_hash, roles, created_at, updated_at FROM users WHERE id = $1"
     )
     .bind(user_id)
     .fetch_optional(&state.pool)
@@ -93,13 +93,20 @@ pub async fn create_user(
         None
     };
 
+    // Convert roles to strings, default to USER if not provided
+    let roles: Vec<String> = req.roles
+        .as_ref()
+        .map(|r| r.iter().map(|role| role.as_str().to_string()).collect())
+        .unwrap_or_else(|| vec!["USER".to_string()]);
+
     let user = sqlx::query_as::<_, User>(
-        "INSERT INTO users (name, identity, password_hash) VALUES ($1, $2, $3)
-         RETURNING id, name, identity, password_hash, created_at, updated_at"
+        "INSERT INTO users (name, identity, password_hash, roles) VALUES ($1, $2, $3, $4)
+         RETURNING id, name, identity, password_hash, roles, created_at, updated_at"
     )
     .bind(&req.name)
     .bind(&req.identity)
     .bind(&password_hash)
+    .bind(&roles)
     .fetch_one(&state.pool)
     .await
     .map_err(internal_error)?;
@@ -134,6 +141,11 @@ pub async fn update_user(
         None
     };
 
+    // Convert roles to strings if provided
+    let roles_opt: Option<Vec<String>> = req.roles
+        .as_ref()
+        .map(|r| r.iter().map(|role| role.as_str().to_string()).collect());
+
     // Build dynamic update query
     let mut query = String::from("UPDATE users SET updated_at = NOW()");
     let mut param_num = 2;
@@ -148,9 +160,13 @@ pub async fn update_user(
     }
     if req.password.is_some() {
         query.push_str(&format!(", password_hash = ${}", param_num));
+        param_num += 1;
+    }
+    if req.roles.is_some() {
+        query.push_str(&format!(", roles = ${}", param_num));
     }
 
-    query.push_str(" WHERE id = $1 RETURNING id, name, identity, password_hash, created_at, updated_at");
+    query.push_str(" WHERE id = $1 RETURNING id, name, identity, password_hash, roles, created_at, updated_at");
 
     let mut query_builder = sqlx::query_as::<_, User>(&query).bind(user_id);
 
@@ -162,6 +178,9 @@ pub async fn update_user(
     }
     if req.password.is_some() {
         query_builder = query_builder.bind(&password_hash);
+    }
+    if let Some(roles) = &roles_opt {
+        query_builder = query_builder.bind(roles);
     }
 
     let user = query_builder

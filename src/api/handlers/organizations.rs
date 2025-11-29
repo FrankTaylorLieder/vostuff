@@ -231,7 +231,7 @@ pub async fn list_organization_users(
     }
 
     let users = sqlx::query_as::<_, crate::api::models::User>(
-        "SELECT u.id, u.name, u.identity, u.password_hash, u.created_at, u.updated_at
+        "SELECT u.id, u.name, u.identity, u.password_hash, u.roles, u.created_at, u.updated_at
          FROM users u
          INNER JOIN user_organizations uo ON u.id = uo.user_id
          WHERE uo.organization_id = $1

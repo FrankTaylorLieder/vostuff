@@ -41,15 +41,15 @@ pub async fn login(
     };
 
     // Get user by identity
-    let user_row = sqlx::query_as::<_, (uuid::Uuid, String, String, Option<String>)>(
-        "SELECT id, name, identity, password_hash FROM users WHERE identity = $1"
+    let user_row = sqlx::query_as::<_, (uuid::Uuid, String, String, Option<String>, Vec<String>)>(
+        "SELECT id, name, identity, password_hash, roles FROM users WHERE identity = $1"
     )
     .bind(&req.identity)
     .fetch_optional(&state.pool)
     .await
     .map_err(internal_error)?;
 
-    let (user_id, user_name, user_identity, password_hash_opt) = match user_row {
+    let (user_id, user_name, user_identity, password_hash_opt, user_roles) = match user_row {
         Some(user) => user,
         None => return Err(invalid_credentials_error()),
     };
@@ -86,7 +86,7 @@ pub async fn login(
     // Generate JWT token
     let token_manager = TokenManager::new(&state.jwt_secret);
     let token = token_manager
-        .generate_token(user_id, user_identity.clone(), org_ids, 24) // 24 hour expiry
+        .generate_token(user_id, user_identity.clone(), user_roles.clone(), org_ids, 24) // 24 hour expiry
         .map_err(internal_error)?;
 
     let response = LoginResponse {
@@ -96,6 +96,7 @@ pub async fn login(
             id: user_id,
             name: user_name,
             identity: user_identity,
+            roles: user_roles,
             organizations: org_rows,
         },
     };

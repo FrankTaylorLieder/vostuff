@@ -187,6 +187,31 @@ pub struct UpdateOrganizationRequest {
     pub description: Option<String>,
 }
 
+// User roles
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone, PartialEq, Eq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum UserRole {
+    User,
+    Admin,
+}
+
+impl UserRole {
+    pub fn as_str(&self) -> &str {
+        match self {
+            UserRole::User => "USER",
+            UserRole::Admin => "ADMIN",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "USER" => Some(UserRole::User),
+            "ADMIN" => Some(UserRole::Admin),
+            _ => None,
+        }
+    }
+}
+
 // User
 #[derive(Debug, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
 pub struct User {
@@ -195,6 +220,7 @@ pub struct User {
     pub identity: String,
     #[serde(skip_serializing)] // Never serialize password hash
     pub password_hash: Option<String>,
+    pub roles: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -205,6 +231,8 @@ pub struct CreateUserRequest {
     pub identity: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub roles: Option<Vec<UserRole>>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -213,6 +241,8 @@ pub struct UpdateUserRequest {
     pub identity: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub roles: Option<Vec<UserRole>>,
 }
 
 // Authentication models
@@ -234,6 +264,7 @@ pub struct UserInfo {
     pub id: Uuid,
     pub name: String,
     pub identity: String,
+    pub roles: Vec<String>,
     pub organizations: Vec<Organization>,
 }
 

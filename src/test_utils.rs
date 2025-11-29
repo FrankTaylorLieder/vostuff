@@ -26,9 +26,10 @@ impl<'a> SampleDataLoader<'a> {
         let coke_id = self.create_org("Coke", "Coca-Cola Organization").await?;
         let pepsi_id = self.create_org("Pepsi", "PepsiCo Organization").await?;
 
-        // Create users with passwords
-        let bob_id = self.create_user("Bob", "bob@coke.com", Some("secret123")).await?;
-        let alice_id = self.create_user("Alice", "alice@pepsi.com", Some("secret123")).await?;
+        // Create users with passwords and roles
+        // Bob is a regular user, Alice is an admin
+        let bob_id = self.create_user("Bob", "bob@coke.com", Some("secret123"), vec!["USER".to_string()]).await?;
+        let alice_id = self.create_user("Alice", "alice@pepsi.com", Some("secret123"), vec!["USER".to_string(), "ADMIN".to_string()]).await?;
 
         // Associate users with orgs
         self.add_user_to_org(bob_id, coke_id).await?;
@@ -76,22 +77,25 @@ impl<'a> SampleDataLoader<'a> {
         Ok(rec.id)
     }
 
-    async fn create_user(&self, name: &str, identity: &str, password: Option<&str>) -> Result<Uuid> {
+    async fn create_user(&self, name: &str, identity: &str, password: Option<&str>, roles: Vec<String>) -> Result<Uuid> {
         let password_hash = match password {
             Some(pwd) => Some(PasswordHasher::hash_password(pwd)?),
             None => None,
         };
 
-        let rec = sqlx::query!(
-            "INSERT INTO users (name, identity, password_hash) VALUES ($1, $2, $3) RETURNING id",
-            name,
-            identity,
-            password_hash
+        let row = sqlx::query(
+            "INSERT INTO users (name, identity, password_hash, roles) VALUES ($1, $2, $3, $4) RETURNING id"
         )
+        .bind(name)
+        .bind(identity)
+        .bind(password_hash)
+        .bind(&roles)
         .fetch_one(self.pool)
         .await?;
-        println!("  ✓ Created user: {} ({})", name, identity);
-        Ok(rec.id)
+
+        let id: Uuid = row.get("id");
+        println!("  ✓ Created user: {} ({}) with roles: {:?}", name, identity, roles);
+        Ok(id)
     }
 
     async fn add_user_to_org(&self, user_id: Uuid, org_id: Uuid) -> Result<()> {

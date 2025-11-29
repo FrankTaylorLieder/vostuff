@@ -293,3 +293,81 @@
   - Invalid passwords are properly rejected with "Invalid credentials" error
 - All changes compiled successfully and integrated with existing authentication system
 - Sample users now support both testing workflows and demonstration purposes with working authentication
+
+## 2025-11-29 - User Roles System Implementation
+
+**Prompt:** "Let's add roles to the system. Users can have one or more roles. The following roles are needed: 'USER', 'ADMIN'. By default users have just the 'USER' role. Specific users can be allocated the 'ADMIN' role. We'll deal with authorization in a later change. The add/update user admin APIs should allow setting or updating roles. The authentication tokens should contain the assigned roles."
+
+**Claude's Response:**
+- **Database Schema Changes**:
+  - Created migration `migrations/20241129000000_add_user_roles.sql`
+  - Added `roles TEXT[]` column to users table with default `{USER}`
+  - Added GIN index on roles column for efficient role lookups
+  - Added check constraint to ensure valid roles (USER, ADMIN)
+
+- **Data Models Updated** (`src/api/models.rs`):
+  - Created `UserRole` enum with User and Admin variants
+  - Added helper methods `as_str()` and `from_str()` for role conversion
+  - Updated `User` struct to include `roles: Vec<String>` field
+  - Updated `CreateUserRequest` to accept optional roles (defaults to USER if not provided)
+  - Updated `UpdateUserRequest` to allow updating roles
+  - Updated `UserInfo` to include roles field in login responses
+
+- **Authentication System Updates**:
+  - Updated JWT `Claims` struct in `src/auth.rs` to include `roles: Vec<String>`
+  - Modified `TokenManager::generate_token()` to accept and encode roles
+  - Updated `AuthContext` to include roles and added helper methods:
+    - `has_role(role: &str)` - Check if user has specific role
+    - `is_admin()` - Convenience method to check for ADMIN role
+  - Updated authentication tests to verify role functionality
+
+- **API Handler Updates**:
+  - Updated login handler (`src/api/handlers/auth.rs`) to:
+    - Query user roles from database
+    - Include roles in JWT token generation
+    - Return roles in UserInfo response
+  - Updated all user management endpoints (`src/api/handlers/users.rs`):
+    - `list_users` - Returns roles for each user
+    - `get_user` - Returns user with roles
+    - `create_user` - Accepts optional roles, defaults to [USER]
+    - `update_user` - Allows updating user roles
+  - Updated `list_organization_users` to include roles in query
+
+- **Sample Data Generator** (`src/test_utils.rs`):
+  - Updated `create_user` method to accept roles parameter
+  - Modified sample data:
+    - Bob (bob@coke.com) - Has USER role only
+    - Alice (alice@pepsi.com) - Has both USER and ADMIN roles
+  - Updated user creation logging to show assigned roles
+
+- **End-to-End Testing Results**:
+  - Verified Bob's login returns `roles: ["USER"]` in response
+  - Verified Alice's login returns `roles: ["USER", "ADMIN"]` in response
+  - Tested creating user with multiple roles via admin API - success
+  - Tested creating user without specifying roles - correctly defaults to ["USER"]
+  - Tested updating user roles via PATCH endpoint - successfully updated
+  - JWT tokens contain roles in claims (verified via response payloads)
+
+- **Authorization Placeholder**:
+  - Infrastructure ready for authorization implementation
+  - `AuthContext` provides `has_role()` and `is_admin()` methods
+  - Can be used in future middleware/handlers for role-based access control
+
+- **Integration Tests** (`tests/api_tests.rs`):
+  - Added 5 comprehensive role-related tests:
+    - `test_user_default_role` - Verifies users default to USER role when none specified
+    - `test_create_user_with_admin_role` - Tests creating users with specific roles
+    - `test_update_user_roles` - Verifies role updates via PATCH endpoint
+    - `test_list_users_includes_roles` - Confirms roles returned in user list responses
+    - `test_login_response_includes_roles` - Validates roles in authentication responses
+  - All 37 integration tests passing (32 existing + 5 new role tests)
+  - Tests verify both Bob (USER only) and Alice (USER + ADMIN) role assignments
+  - Full test coverage for role creation, updates, and retrieval
+
+- **Technical Notes**:
+  - Used non-macro sqlx::query() in test_utils to avoid compile-time checking issues
+  - Roles stored as PostgreSQL TEXT[] array for flexibility
+  - UserRole enum provides type safety at API boundary
+  - Database constraint ensures only valid roles can be stored
+
+All role functionality working correctly with full integration across database, API, authentication, and admin interfaces. Complete test coverage with 37 passing integration tests. System ready for future authorization implementation.

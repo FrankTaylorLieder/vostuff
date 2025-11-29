@@ -35,6 +35,7 @@ impl PasswordHasher {
 pub struct Claims {
     pub sub: Uuid,         // Subject (user ID)
     pub identity: String,  // User identity (email)
+    pub roles: Vec<String>, // User roles (USER, ADMIN)
     pub organizations: Vec<Uuid>, // Organizations user belongs to
     pub iat: i64,         // Issued at
     pub exp: i64,         // Expiration time
@@ -68,6 +69,7 @@ impl TokenManager {
         &self,
         user_id: Uuid,
         identity: String,
+        roles: Vec<String>,
         organizations: Vec<Uuid>,
         expires_in_hours: i64,
     ) -> Result<String> {
@@ -77,6 +79,7 @@ impl TokenManager {
         let claims = Claims {
             sub: user_id,
             identity,
+            roles,
             organizations,
             iat: now.timestamp(),
             exp: exp.timestamp(),
@@ -100,6 +103,7 @@ impl TokenManager {
 pub struct AuthContext {
     pub user_id: Uuid,
     pub identity: String,
+    pub roles: Vec<String>,
     pub organizations: Vec<Uuid>,
     pub is_authenticated: bool,
 }
@@ -110,6 +114,7 @@ impl AuthContext {
         Self {
             user_id: Uuid::nil(),
             identity: String::new(),
+            roles: Vec::new(),
             organizations: Vec::new(),
             is_authenticated: false,
         }
@@ -120,6 +125,7 @@ impl AuthContext {
         Self {
             user_id: claims.sub,
             identity: claims.identity,
+            roles: claims.roles,
             organizations: claims.organizations,
             is_authenticated: true,
         }
@@ -133,6 +139,16 @@ impl AuthContext {
     /// Check if user is authenticated
     pub fn is_authenticated(&self) -> bool {
         self.is_authenticated
+    }
+
+    /// Check if user has a specific role
+    pub fn has_role(&self, role: &str) -> bool {
+        self.is_authenticated && self.roles.contains(&role.to_string())
+    }
+
+    /// Check if user is admin
+    pub fn is_admin(&self) -> bool {
+        self.has_role("ADMIN")
     }
 }
 
@@ -157,15 +173,17 @@ mod tests {
         let manager = TokenManager::new("test_secret_key_for_testing");
         let user_id = Uuid::new_v4();
         let identity = "test@example.com".to_string();
+        let roles = vec!["USER".to_string(), "ADMIN".to_string()];
         let organizations = vec![Uuid::new_v4()];
 
         // Generate token
-        let token = manager.generate_token(user_id, identity.clone(), organizations.clone(), 24).unwrap();
+        let token = manager.generate_token(user_id, identity.clone(), roles.clone(), organizations.clone(), 24).unwrap();
 
         // Validate token
         let claims = manager.validate_token(&token).unwrap();
         assert_eq!(claims.sub, user_id);
         assert_eq!(claims.identity, identity);
+        assert_eq!(claims.roles, roles);
         assert_eq!(claims.organizations, organizations);
     }
 
@@ -177,6 +195,7 @@ mod tests {
         let context = AuthContext {
             user_id: Uuid::new_v4(),
             identity: "test@example.com".to_string(),
+            roles: vec!["USER".to_string(), "ADMIN".to_string()],
             organizations: vec![org_id],
             is_authenticated: true,
         };
@@ -184,5 +203,9 @@ mod tests {
         assert!(context.has_org_access(org_id));
         assert!(!context.has_org_access(other_org_id));
         assert!(context.is_authenticated());
+        assert!(context.has_role("USER"));
+        assert!(context.has_role("ADMIN"));
+        assert!(!context.has_role("SUPERUSER"));
+        assert!(context.is_admin());
     }
 }

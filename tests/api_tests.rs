@@ -1238,3 +1238,194 @@ async fn test_auth_login_user_without_password() {
 
     pool.close().await;
 }
+
+// ==================== Role Tests ====================
+
+#[tokio::test]
+async fn test_user_default_role() {
+    let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    // Create user without specifying roles
+    let new_user = json!({
+        "name": "Default Role User",
+        "identity": "defaultrole@example.com"
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/admin/users")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&new_user).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let user: User = serde_json::from_slice(&body).unwrap();
+
+    // Should default to USER role
+    assert_eq!(user.roles, vec!["USER"]);
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_create_user_with_admin_role() {
+    let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    // Create user with ADMIN role
+    let new_user = json!({
+        "name": "Admin User",
+        "identity": "admin@example.com",
+        "roles": ["USER", "ADMIN"]
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/admin/users")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&new_user).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let user: User = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(user.name, "Admin User");
+    assert_eq!(user.roles, vec!["USER", "ADMIN"]);
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_update_user_roles() {
+    let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    // First get Bob's ID (Bob should have USER role only from sample data)
+    let list_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/admin/users")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let body = axum::body::to_bytes(list_response.into_body(), usize::MAX).await.unwrap();
+    let users: Vec<User> = serde_json::from_slice(&body).unwrap();
+    let bob = users.iter().find(|u| u.name == "Bob").unwrap();
+
+    // Verify Bob starts with just USER role
+    assert_eq!(bob.roles, vec!["USER"]);
+
+    // Update Bob to have ADMIN role
+    let update_data = json!({
+        "roles": ["USER", "ADMIN"]
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/api/admin/users/{}", bob.id))
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&update_data).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let updated_user: User = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(updated_user.roles, vec!["USER", "ADMIN"]);
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_list_users_includes_roles() {
+    let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/admin/users")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let users: Vec<User> = serde_json::from_slice(&body).unwrap();
+
+    // Find Bob and Alice
+    let bob = users.iter().find(|u| u.name == "Bob").unwrap();
+    let alice = users.iter().find(|u| u.name == "Alice").unwrap();
+
+    // Bob should have USER role
+    assert_eq!(bob.roles, vec!["USER"]);
+
+    // Alice should have both USER and ADMIN roles
+    assert_eq!(alice.roles, vec!["USER", "ADMIN"]);
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_login_response_includes_roles() {
+    let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    // Login as Alice (who has ADMIN role)
+    let login_request = json!({
+        "identity": "alice@pepsi.com",
+        "password": "secret123"
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/login")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&login_request).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let login_response: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    // Verify roles are in the response
+    assert_eq!(login_response["user"]["roles"], json!(["USER", "ADMIN"]));
+    assert_eq!(login_response["user"]["identity"], "alice@pepsi.com");
+    assert_eq!(login_response["user"]["name"], "Alice");
+
+    pool.close().await;
+}
