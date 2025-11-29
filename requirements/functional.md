@@ -129,4 +129,64 @@ a new login request needs to be made. We may change this behaviour in future.
 
 ## UI
 
-(To be defined later.)
+### Stack
+
+The UI will be built on Leptos:
+
+- Using SSR + Hydration as it offers:
+    - Improved handling of security tokens.
+    - Provides better initial rendering performance compared to client side
+    rendering.
+    - Wraps server calls as server-side functions.
+- We'll separate the client web server from the API web server.
+    - This ensures the API is kept usable by other clients.
+    - Provide good separation between the client and server elements of the
+    solution.
+- The application will use Tailwind CSS for styling.
+
+### Layout
+
+This will essentially be a one screen application:
+
+- A main page with filtering elements at the top and a results table below
+listing the matching items.
+- The filtering section will support:
+    - By: type, tag, location.
+    - Can select zero or more of each filter item from a drop down listing the
+    items and selectable by a checkbox.
+        - When not dropped down, the filter will be a rendered view of the
+        selected items. Truncating the render as needed to fit the space, but
+        indicating how many items are in the select list of filter items.
+- The results table will show the primary fields in columns.
+    - Each item can be expanded, opening a view with all the appropriate fields
+    for that type shown (all the core fields not shown and any type-specific
+    fields).
+- The results can be ordered by any of the primary fields. Clicking on the
+header for the that column selects it for ordering and subsequent clicks change
+the ordering direction.
+- The primary fields are:
+    - Item type
+    - Name
+    - Item state
+    - Location
+- There will be a button to add a new item.
+    - It will pop up a window with the core fields and a type selector.
+    - When a type is selected, additional fields are populated as needed for
+    that type.
+    - The type can be changed during creation, with any data entered for a type
+    specific field being remembered if the type is changed away then back
+    again.
+    - There will be a OK button to create the item, and a cancel button.
+- There will be an edit button which will bring up an edit window for the
+currently selected item in the main results page.
+    - The edit window is like the create window, but is pre-populated with data
+    from the item.
+    - The item type cannot be changed whilst editing.
+- There will be a delete button which will delete the currently selected item
+in the main view after the user has confirmed this action.
+- The application will show an authentication screen if no valid token is
+available.
+    - Authentication needs to handle initial username password acquisition and
+    org selection as a secondary action.
+- The current username is displayed at the top right of the main page, together
+with a logout button.
