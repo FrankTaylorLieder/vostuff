@@ -190,3 +190,219 @@ available.
     org selection as a secondary action.
 - The current username is displayed at the top right of the main page, together
 with a logout button.
+
+### Core UI Requirements
+
+- UI1 The results table must support pagination with configurable page size
+(10, 25, 50, 100 items per page).
+    - Previous/Next buttons and page number selection.
+    - Display showing "X-Y of Z items" to indicate current position.
+
+- UI2 A search/filter bar must allow text search across item name and
+description fields.
+    - Search should be case-insensitive.
+    - Can be combined with other filters (type, tag, location, collection,
+    state).
+
+- UI3 The filter section must include filtering by:
+    - Item state (CURRENT, LOANED, MISSING, DISPOSED)
+    - Collection membership
+    - In addition to the already specified: type, tag, location
+
+- UI4 Markdown notes fields must be editable and viewable:
+    - A markdown editor with preview for entering/editing notes on items and
+    collections.
+    - Rendered markdown display in the expanded item view and collection views.
+    - Basic markdown formatting support: headings, lists, bold, italic, links,
+    code blocks.
+
+### Collections Management
+
+- UI5 A Collections view/page must be accessible from the main navigation.
+    - Lists all collections for the current organization.
+    - Shows collection name, description, and item count.
+    - Supports search/filter by collection name.
+
+- UI6 A "Create Collection" button must allow users to create new collections.
+    - Popup/modal window with fields: name, description, notes (markdown).
+    - OK button to create, Cancel button to abort.
+
+- UI7 Collections must be editable via an Edit button.
+    - Same popup as creation, pre-populated with existing data.
+    - Cannot change collection ID.
+
+- UI8 Collections must be deletable via a Delete button.
+    - Confirmation dialog required.
+    - Clarify what happens to items in the collection (collection reference
+    removed, items remain).
+
+- UI9 Clicking on a collection should show all items in that collection.
+    - Essentially applying a collection filter to the main items view.
+
+- UI10 During item creation/editing, collections must be assignable via a
+multi-select dropdown.
+    - Shows all available collections for the organization.
+    - Can select multiple collections.
+    - Can create new collections inline (optional enhancement).
+
+### Locations Management
+
+- UI11 A Locations management interface must be accessible (sidebar, settings,
+or dedicated page).
+    - Lists all locations for the current organization.
+    - Shows location name and item count.
+
+- UI12 A "Create Location" button must allow users to create new locations.
+    - Simple dialog with location name field.
+    - OK/Cancel buttons.
+
+- UI13 Locations must be editable via an Edit button.
+    - Dialog with location name, pre-populated.
+    - OK/Cancel buttons.
+
+- UI14 Locations must be deletable via a Delete button.
+    - Confirmation required.
+    - Cannot delete if items reference this location (show error) OR provide
+    option to reassign items to another location.
+
+### Tags Management
+
+- UI15 A Tags management interface must be accessible (sidebar, settings, or
+dedicated page).
+    - Lists all tags for the current organization.
+    - Shows tag name and usage count (number of items with this tag).
+
+- UI16 A "Create Tag" button must allow users to create new tags.
+    - Simple dialog with tag name field.
+    - Tag names must be unique within organization.
+    - OK/Cancel buttons.
+
+- UI17 Tags must be editable via an Edit button.
+    - Dialog to rename tag.
+    - Updates all items using this tag.
+
+- UI18 Tags must be deletable via a Delete button.
+    - Confirmation required.
+    - Removes tag from all items.
+
+- UI19 During item creation/editing, tags must be assignable via a multi-select
+or tag input widget.
+    - Shows existing tags as suggestions.
+    - Can create new tags inline.
+    - Can remove tags from the item.
+
+### Item State Management
+
+- UI20 The item edit/view interface must support state transitions.
+    - A "Change State" button or state dropdown in the edit view.
+    - When selecting a new state, appropriate additional fields appear:
+        - LOANED: Date loaned (default: today), Date due back (optional),
+        Loaned to (text field)
+        - MISSING: Date missing (default: today)
+        - DISPOSED: Date disposed (default: today)
+        - CURRENT: No additional fields
+
+- UI21 State-specific information must be displayed in the expanded item view.
+    - For LOANED items: Show who has it, when loaned, when due back.
+    - For MISSING items: Show when reported missing.
+    - For DISPOSED items: Show when disposed.
+
+- UI22 The main results table should visually distinguish items by state.
+    - Color coding or icons for different states.
+    - LOANED items could show due date if approaching.
+
+### Organization Management
+
+- UI23 Users belonging to multiple organizations must be able to switch between
+organizations without logging out.
+    - Organization selector in the top navigation (next to username).
+    - Dropdown showing all user's organizations.
+    - Selecting an organization refreshes the view with that org's data.
+    - Preserves session, only changes active organization context.
+
+- UI24 The top navigation must display the current organization name clearly.
+    - Shows which organization's data is currently being viewed.
+
+### Admin UI (for SYSTEM organization members)
+
+- UI25 An Admin section must be accessible only to SYSTEM organization members.
+    - Separate navigation item or admin dashboard.
+    - Includes organization management and user management.
+
+- UI26 Organization management interface must support:
+    - List all organizations with name, description, user count, item count.
+    - Create new organization (name, description).
+    - Edit existing organization (name, description).
+    - Delete organization (with confirmation, cascade considerations).
+    - View organization details including member list.
+
+- UI27 User management interface must support:
+    - List all users with name, identity, organization memberships.
+    - Create new user (name, identity, password).
+    - Edit user (name, identity, update password).
+    - Delete user (with confirmation).
+    - View user details.
+
+- UI28 User-organization membership management must support:
+    - Add user to organization with role selection (USER, ADMIN, OWNER).
+    - Remove user from organization (with confirmation).
+    - Update user's roles within an organization.
+    - View user's roles across all their organizations.
+
+- UI29 Role-based access control must be reflected in the UI:
+    - USER: Can view and create items, locations, collections, tags.
+    - ADMIN: All USER permissions plus ability to edit/delete all items,
+    manage locations, collections, tags.
+    - OWNER: All ADMIN permissions plus ability to manage organization
+    settings and user memberships.
+    - Certain UI elements should be hidden/disabled based on user's role.
+
+### Audit and History
+
+- UI30 An audit log viewer must be available for each item.
+    - "View History" button in the item detail/edit view.
+    - Shows chronological list of all changes to the item.
+    - Each entry shows: date/time, type of change, summary of what changed.
+    - May show user who made the change (if that's added to audit model).
+
+- UI31 A system-wide audit log should be accessible to ADMIN and OWNER roles.
+    - Shows recent changes across all items in the organization.
+    - Filterable by: date range, item, user (if user tracking added).
+    - Useful for compliance and troubleshooting.
+
+### Error Handling and Feedback
+
+- UI32 All user actions must provide clear feedback.
+    - Success messages for create/update/delete operations.
+    - Error messages with actionable information.
+    - Loading indicators for async operations.
+
+- UI33 Network errors and API failures must be handled gracefully.
+    - Display user-friendly error messages.
+    - Offer retry options where appropriate.
+    - Don't expose raw error details to non-admin users.
+
+- UI34 Session expiration must be handled elegantly.
+    - When JWT expires (after 24 hours), redirect to login.
+    - Preserve the current page/context if possible to return after re-auth.
+    - Show warning message before expiration (e.g., at 23 hours).
+
+### Responsive Design
+
+- UI35 The UI must be responsive and work on different screen sizes.
+    - Desktop: Full layout with side-by-side filters and results.
+    - Tablet: Adjusted layout, possibly collapsible filters.
+    - Mobile: Stacked layout, filters in expandable panel.
+
+- UI36 Touch-friendly interface elements for tablet/mobile.
+    - Adequate button sizes for touch targets.
+    - Swipe gestures where appropriate (e.g., to delete items).
+
+### Accessibility
+
+- UI37 The UI must follow basic accessibility guidelines.
+    - Proper semantic HTML.
+    - ARIA labels where needed.
+    - Keyboard navigation support.
+    - Sufficient color contrast.
+    - Screen reader compatibility.
