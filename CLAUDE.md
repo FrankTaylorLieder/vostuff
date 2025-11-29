@@ -65,26 +65,31 @@ Follow this checklist for every Claude Code session:
 - [ ] Check code quality: `cargo clippy` and `cargo fmt`
 - [ ] Update TODO.md with any new identified work
 
-### After Significant Work
+### After Significant Work (REQUIRED BEFORE FINISHING)
 - [ ] Mark completed todos as done in TODO.md
-- [ ] Update JOURNAL.md proactively when substantial work is completed containing:
-    - Date and time
-    - The prompt(s) - in full
+- [ ] **MANDATORY: Update JOURNAL.md proactively when substantial work is completed**
+    - Date and time (format: YYYY-MM-DD)
+    - The prompt(s) - in full (include all user prompts from the session)
     - Summary of Claude's response and work completed
+    - **DO NOT consider a session complete until JOURNAL.md is updated**
 
 ## Standing instructions
 
 These instructions should be followed with every interaction:
 
-- In order to keep a complete record of development of this project, all interactions
-through Claude Code should be recorded in a file called `JOURNAL.md` in the top
-level of the repository:
-    - Each entry should consist of:
-        - A date and time
-        - The prompt - in full
-        - A summary of Claude's response
+- **CRITICAL: JOURNAL.md must be updated before ending any session with substantial work**
+  - In order to keep a complete record of development of this project, all interactions
+    through Claude Code should be recorded in a file called `JOURNAL.md` in the top
+    level of the repository
+  - Each entry should consist of:
+    - Date and time (format: YYYY-MM-DD)
+    - The prompt(s) - in full (all user prompts from the session)
+    - A summary of Claude's response and work completed
+  - **This is not optional - it must be done proactively when you complete substantial work**
+  - What counts as "substantial work": new features, bug fixes, refactoring, schema changes,
+    configuration updates, or any code changes beyond trivial edits
 - You should maintain a todo list of identified work that has not been
-completed in the top level `TODO.md` file, marking items as done when they are
-completed.
+  completed in the top level `TODO.md` file, marking items as done when they are
+  completed.
 
 

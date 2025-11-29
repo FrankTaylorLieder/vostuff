@@ -1,6 +1,7 @@
 use anyhow::Result;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
+use crate::auth::PasswordHasher;
 
 pub struct SampleDataLoader<'a> {
     pool: &'a PgPool,
@@ -25,9 +26,9 @@ impl<'a> SampleDataLoader<'a> {
         let coke_id = self.create_org("Coke", "Coca-Cola Organization").await?;
         let pepsi_id = self.create_org("Pepsi", "PepsiCo Organization").await?;
 
-        // Create users
-        let bob_id = self.create_user("Bob", "bob@coke.com").await?;
-        let alice_id = self.create_user("Alice", "alice@pepsi.com").await?;
+        // Create users with passwords
+        let bob_id = self.create_user("Bob", "bob@coke.com", Some("secret123")).await?;
+        let alice_id = self.create_user("Alice", "alice@pepsi.com", Some("secret123")).await?;
 
         // Associate users with orgs
         self.add_user_to_org(bob_id, coke_id).await?;
@@ -75,11 +76,17 @@ impl<'a> SampleDataLoader<'a> {
         Ok(rec.id)
     }
 
-    async fn create_user(&self, name: &str, identity: &str) -> Result<Uuid> {
+    async fn create_user(&self, name: &str, identity: &str, password: Option<&str>) -> Result<Uuid> {
+        let password_hash = match password {
+            Some(pwd) => Some(PasswordHasher::hash_password(pwd)?),
+            None => None,
+        };
+
         let rec = sqlx::query!(
-            "INSERT INTO users (name, identity) VALUES ($1, $2) RETURNING id",
+            "INSERT INTO users (name, identity, password_hash) VALUES ($1, $2, $3) RETURNING id",
             name,
-            identity
+            identity,
+            password_hash
         )
         .fetch_one(self.pool)
         .await?;

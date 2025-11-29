@@ -277,3 +277,19 @@
   - Corrected missing password_hash field in organization users query
 
 - **Final State**: Production-ready authentication system with optional passwords, secure token management, comprehensive middleware integration, and full test coverage. All security best practices implemented including proper password hashing, JWT expiration, and user enumeration prevention.
+
+## 2025-11-29 - Sample Data Generator Password Enhancement
+
+**Prompt:** "Does the same data generator set user passwords?" followed by "Can you update the generator to set sample user account passwords to 'secret123'"
+
+**Claude's Response:**
+- Identified that the sample data generator (`src/test_utils.rs`) did not set passwords for sample users Bob and Alice
+- Modified the `create_user` method to accept an optional password parameter
+- Integrated `PasswordHasher::hash_password()` to securely hash passwords using Argon2
+- Updated sample data creation to set password "secret123" for both Bob (`bob@coke.com`) and Alice (`alice@pepsi.com`)
+- Successfully tested authentication:
+  - Both users can now login via `/api/auth/login` endpoint
+  - Valid credentials return JWT tokens with user info and organization memberships
+  - Invalid passwords are properly rejected with "Invalid credentials" error
+- All changes compiled successfully and integrated with existing authentication system
+- Sample users now support both testing workflows and demonstration purposes with working authentication
