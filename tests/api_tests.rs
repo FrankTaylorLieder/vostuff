@@ -56,9 +56,11 @@ fn create_test_router(pool: PgPool) -> Router {
         // Admin - User Organizations
         .route("/api/admin/users/:user_id/organizations", get(vostuff::api::handlers::users::list_user_organizations))
         .route("/api/admin/users/:user_id/organizations/:org_id", post(vostuff::api::handlers::users::add_user_to_organization))
+        .route("/api/admin/users/:user_id/organizations/:org_id", patch(vostuff::api::handlers::users::update_user_org_roles))
         .route("/api/admin/users/:user_id/organizations/:org_id", delete(vostuff::api::handlers::users::remove_user_from_organization))
         // Authentication
         .route("/api/auth/login", post(vostuff::api::handlers::auth::login))
+        .route("/api/auth/select-org", post(vostuff::api::handlers::auth::select_org))
         .with_state(state)
 }
 
@@ -1451,6 +1453,338 @@ async fn test_login_response_includes_roles() {
     assert_eq!(login_response["user"]["roles"], json!(["USER", "ADMIN"]));
     assert_eq!(login_response["user"]["identity"], "alice@pepsi.com");
     assert_eq!(login_response["user"]["name"], "Alice");
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_auth_multi_org_login_without_org_id() {
+    let (pool, coke_org_id, pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    // Create a user with password
+    let new_user = serde_json::json!({
+        "name": "Multi Org User",
+        "identity": "multiorg@example.com",
+        "password": "testpass123"
+    });
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/admin/users")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&new_user).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+    let body = axum::body::to_bytes(create_response.into_body(), usize::MAX).await.unwrap();
+    let created_user: User = serde_json::from_slice(&body).unwrap();
+
+    // Add user to both Coke and Pepsi organizations
+    let add_to_coke = serde_json::json!({"roles": ["USER"]});
+    let coke_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/admin/users/{}/organizations/{}", created_user.id, coke_org_id))
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&add_to_coke).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(coke_response.status(), StatusCode::CREATED);
+
+    let add_to_pepsi = serde_json::json!({"roles": ["USER", "ADMIN"]});
+    let pepsi_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/admin/users/{}/organizations/{}", created_user.id, pepsi_org_id))
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&add_to_pepsi).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(pepsi_response.status(), StatusCode::CREATED);
+
+    // Now login without specifying org_id - should get org selection response
+    let login_request = serde_json::json!({
+        "identity": "multiorg@example.com",
+        "password": "testpass123"
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/login")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&login_request).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let org_selection: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    // Should have organizations array and follow_on_token
+    assert!(org_selection["organizations"].is_array());
+    assert!(org_selection["follow_on_token"].is_string());
+
+    let orgs = org_selection["organizations"].as_array().unwrap();
+    assert_eq!(orgs.len(), 2);
+
+    // Find Coke and Pepsi orgs
+    let coke = orgs.iter().find(|o| o["name"] == "Coke").unwrap();
+    let pepsi = orgs.iter().find(|o| o["name"] == "Pepsi").unwrap();
+
+    // Verify roles for each org
+    assert_eq!(coke["roles"], json!(["USER"]));
+    assert_eq!(pepsi["roles"], json!(["USER", "ADMIN"]));
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_auth_select_org_with_follow_on_token() {
+    let (pool, coke_org_id, pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    // Create a user with password
+    let new_user = serde_json::json!({
+        "name": "Multi Org User 2",
+        "identity": "multiorg2@example.com",
+        "password": "testpass123"
+    });
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/admin/users")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&new_user).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let body = axum::body::to_bytes(create_response.into_body(), usize::MAX).await.unwrap();
+    let created_user: User = serde_json::from_slice(&body).unwrap();
+
+    // Add user to both organizations
+    let add_to_coke = serde_json::json!({"roles": ["USER"]});
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/admin/users/{}/organizations/{}", created_user.id, coke_org_id))
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&add_to_coke).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let add_to_pepsi = serde_json::json!({"roles": ["USER", "ADMIN"]});
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/admin/users/{}/organizations/{}", created_user.id, pepsi_org_id))
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&add_to_pepsi).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // Login to get follow-on token
+    let login_request = serde_json::json!({
+        "identity": "multiorg2@example.com",
+        "password": "testpass123"
+    });
+
+    let login_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/login")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&login_request).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let body = axum::body::to_bytes(login_response.into_body(), usize::MAX).await.unwrap();
+    let org_selection: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let follow_on_token = org_selection["follow_on_token"].as_str().unwrap();
+
+    // Now use the follow-on token to select Pepsi org
+    let select_org_request = serde_json::json!({
+        "follow_on_token": follow_on_token,
+        "organization_id": pepsi_org_id
+    });
+
+    let select_response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/select-org")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&select_org_request).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(select_response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(select_response.into_body(), usize::MAX).await.unwrap();
+    let final_response: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    // Should have final token with Pepsi org and roles
+    assert!(final_response["token"].is_string());
+    assert_eq!(final_response["user"]["identity"], "multiorg2@example.com");
+    assert_eq!(final_response["user"]["organization"]["name"], "Pepsi");
+    assert_eq!(final_response["user"]["roles"], json!(["USER", "ADMIN"]));
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_auth_select_org_invalid_token() {
+    let (pool, _coke_org_id, pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    // Try to select org with invalid follow-on token
+    let select_org_request = serde_json::json!({
+        "follow_on_token": "invalid.token.here",
+        "organization_id": pepsi_org_id
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/select-org")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&select_org_request).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let error: ErrorResponse = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(error.error, "invalid_token");
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_auth_multi_org_login_with_explicit_org_id() {
+    let (pool, coke_org_id, pepsi_org_id) = setup_test_db().await;
+    let app = create_test_router(pool.clone());
+
+    // Create a user with password
+    let new_user = serde_json::json!({
+        "name": "Multi Org User 3",
+        "identity": "multiorg3@example.com",
+        "password": "testpass123"
+    });
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/admin/users")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&new_user).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let body = axum::body::to_bytes(create_response.into_body(), usize::MAX).await.unwrap();
+    let created_user: User = serde_json::from_slice(&body).unwrap();
+
+    // Add user to both organizations with different roles
+    let add_to_coke = serde_json::json!({"roles": ["USER"]});
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/admin/users/{}/organizations/{}", created_user.id, coke_org_id))
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&add_to_coke).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let add_to_pepsi = serde_json::json!({"roles": ["USER", "ADMIN"]});
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/admin/users/{}/organizations/{}", created_user.id, pepsi_org_id))
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&add_to_pepsi).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // Login with explicit Coke org_id - should get direct authentication
+    let login_request = serde_json::json!({
+        "identity": "multiorg3@example.com",
+        "password": "testpass123",
+        "organization_id": coke_org_id
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/login")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&login_request).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let login_response: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    // Should have final token with Coke org and USER role only
+    assert!(login_response["token"].is_string());
+    assert_eq!(login_response["user"]["identity"], "multiorg3@example.com");
+    assert_eq!(login_response["user"]["organization"]["name"], "Coke");
+    assert_eq!(login_response["user"]["roles"], json!(["USER"]));
 
     pool.close().await;
 }
