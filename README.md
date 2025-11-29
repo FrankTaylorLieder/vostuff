@@ -11,6 +11,7 @@ A three-tier Rust application for tracking collections of stuff - vinyl records,
   - Items with type-specific details (vinyl, CD, cassette, book, score, electronics, misc)
   - Item state management (current, loaned, missing, disposed)
   - Collections, tags, and locations for organization
+  - Organization-specific role-based access control (USER, ADMIN, OWNER)
   - Comprehensive audit logging
 - **Schema Management**: CLI tool and reusable library for database migrations
 - **Docker Development Environment**: Containerized PostgreSQL for easy local development
@@ -19,7 +20,10 @@ A three-tier Rust application for tracking collections of stuff - vinyl records,
   - CRUD endpoints for items, locations, collections, and tags
   - Organization-scoped operations
   - Admin endpoints for managing users and organizations
-  - User-organization membership management
+  - User-organization membership and role management
+  - JWT-based authentication with password support
+  - Multi-organization authentication flow with intelligent org selection
+  - Organization-specific role-based access control
   - Pagination support
   - Interactive OpenAPI/Swagger documentation at `/swagger-ui`
   - Type-safe request/response models
@@ -27,8 +31,7 @@ A three-tier Rust application for tracking collections of stuff - vinyl records,
 
 ### Planned
 - Web UI (Leptos with SSR)
-- OIDC Authentication
-- Session Management and JWT tokens
+- OIDC Authentication integration
 
 ## Prerequisites
 
@@ -212,8 +215,8 @@ The PostgreSQL schema implements a multi-tenant system with:
 
 ### Core Tables
 - **organizations**: Tenant isolation boundary
-- **users**: User accounts with OIDC identity
-- **user_organizations**: Many-to-many user/org membership
+- **users**: User accounts with OIDC identity and password authentication
+- **user_organizations**: Many-to-many user/org membership with role-based access control (USER, ADMIN, OWNER)
 
 ### Item Management
 - **items**: Core item data with type and state
@@ -321,21 +324,74 @@ Admin endpoints for platform-level management of users and organizations:
 - `DELETE /api/admin/users/{user_id}` - Delete a user
 
 **User-Organization Memberships**
-- `GET /api/admin/users/{user_id}/organizations` - List organizations for a user
-- `POST /api/admin/users/{user_id}/organizations/{org_id}` - Add user to organization
+- `GET /api/admin/users/{user_id}/organizations` - List organizations for a user (with roles)
+- `POST /api/admin/users/{user_id}/organizations/{org_id}` - Add user to organization with roles
+- `PATCH /api/admin/users/{user_id}/organizations/{org_id}` - Update user's roles in an organization
 - `DELETE /api/admin/users/{user_id}/organizations/{org_id}` - Remove user from organization
 - `GET /api/admin/organizations/{org_id}/users` - List users in an organization
 
+**Roles**: Each user-organization membership includes one or more roles:
+- `USER` - Basic access to organization resources
+- `ADMIN` - Administrative privileges within the organization
+- `OWNER` - Full control including org settings and user management
+
 #### Authentication Endpoints
 
-Authentication endpoints for user login and JWT token management:
+Authentication endpoints for user login and JWT token management. The authentication flow intelligently handles users who belong to multiple organizations.
 
-**Login**
-- `POST /api/auth/login` - User login with password authentication
-  - Request: `{"identity": "user@example.com", "password": "password"}`
-  - Response: `{"token": "jwt_token", "expires_in": 86400, "user": {...}}`
-  - Returns JWT token valid for 24 hours
-  - Provides user info and organization memberships
+**Login** - `POST /api/auth/login`
+- Password-based authentication with smart organization selection
+- JWT tokens are scoped to a single organization and include org-specific roles
+
+**Three Authentication Scenarios:**
+
+1. **User belongs to multiple orgs, no org specified**
+   - Request: `{"identity": "user@example.com", "password": "password"}`
+   - Response: Organization selection response with follow-on token
+   ```json
+   {
+     "organizations": [
+       {
+         "id": "uuid",
+         "name": "Org Name",
+         "roles": ["USER", "ADMIN"]
+       }
+     ],
+     "follow_on_token": "temporary_token"
+   }
+   ```
+   - Follow-on token valid for 5 minutes
+   - Use `POST /api/auth/select-org` to complete authentication
+
+2. **User belongs to single org (auto-selected)**
+   - Request: `{"identity": "user@example.com", "password": "password"}`
+   - Response: Direct authentication with JWT token
+   ```json
+   {
+     "token": "jwt_token",
+     "expires_in": 86400,
+     "user": {
+       "id": "uuid",
+       "name": "User Name",
+       "identity": "user@example.com",
+       "organization": {
+         "id": "uuid",
+         "name": "Org Name"
+       },
+       "roles": ["USER"]
+     }
+   }
+   ```
+
+3. **User specifies organization upfront**
+   - Request: `{"identity": "user@example.com", "password": "password", "organization_id": "uuid"}`
+   - Response: Direct authentication with JWT token (same as scenario 2)
+
+**Select Organization** - `POST /api/auth/select-org`
+- Complete multi-org authentication flow
+- Request: `{"follow_on_token": "token", "organization_id": "uuid"}`
+- Response: Final JWT token with organization-specific access
+- Follow-on tokens expire after 5 minutes
 
 ### Example API Usage
 
@@ -375,20 +431,73 @@ curl -X POST "http://localhost:8080/api/admin/organizations" \
 # List all users
 curl "http://localhost:8080/api/admin/users"
 
-# Create a new user
+# Create a new user with password
 curl -X POST "http://localhost:8080/api/admin/users" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Jane Doe",
-    "identity": "jane@example.com"
+    "identity": "jane@example.com",
+    "password": "secure_password_123"
   }'
 
-# Add user to organization
+# Add user to organization with roles
 USER_ID=$(docker exec vostuff-postgres psql -U vostuff -d vostuff_dev -t -c "SELECT id FROM users WHERE name='Jane Doe'")
-curl -X POST "http://localhost:8080/api/admin/users/${USER_ID}/organizations/${ORG_ID}"
+curl -X POST "http://localhost:8080/api/admin/users/${USER_ID}/organizations/${ORG_ID}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "roles": ["USER", "ADMIN"]
+  }'
 
-# List organizations for a user
+# Update user's roles in organization
+curl -X PATCH "http://localhost:8080/api/admin/users/${USER_ID}/organizations/${ORG_ID}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "roles": ["USER", "ADMIN", "OWNER"]
+  }'
+
+# List organizations for a user (shows roles for each org)
 curl "http://localhost:8080/api/admin/users/${USER_ID}/organizations"
+```
+
+#### Authentication Operations
+
+```bash
+# Login - Single organization (auto-selected)
+curl -X POST "http://localhost:8080/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "identity": "jane@example.com",
+    "password": "secure_password_123"
+  }'
+# Returns: {"token": "jwt_token", "expires_in": 86400, "user": {...}}
+
+# Login - Multi-organization (requires org selection)
+curl -X POST "http://localhost:8080/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "identity": "multiorg@example.com",
+    "password": "password"
+  }'
+# Returns: {"organizations": [...], "follow_on_token": "temp_token"}
+
+# Complete multi-org authentication by selecting organization
+curl -X POST "http://localhost:8080/api/auth/select-org" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "follow_on_token": "temp_token_from_previous_response",
+    "organization_id": "org_uuid_to_select"
+  }'
+# Returns: {"token": "jwt_token", "expires_in": 86400, "user": {...}}
+
+# Login - Direct org specification (bypasses selection)
+curl -X POST "http://localhost:8080/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "identity": "multiorg@example.com",
+    "password": "password",
+    "organization_id": "specific_org_uuid"
+  }'
+# Returns: {"token": "jwt_token", "expires_in": 86400, "user": {...}}
 ```
 
 ### OpenAPI Documentation
@@ -426,16 +535,17 @@ cargo test --test api_tests test_list_items
 ### Test Coverage
 
 The integration tests cover:
-- 27 comprehensive test cases
+- 41 comprehensive test cases
 - Items: List (with pagination), Get, Create, Update, Delete
 - Locations: List, Create, Delete
 - Collections: List, Create, Delete
 - Tags: List, Create, Delete
-- Organizations (Admin): List, Get, Create, Update, Delete
-- Users (Admin): List, Create, Update
-- User-Organization Memberships (Admin): List, Add, Remove
+- Organizations (Admin): List, Get, Create, Update, Delete, List Users
+- Users (Admin): List, Create, Update, Delete
+- User-Organization Memberships (Admin): List, Add, Remove, Update Roles
+- Authentication: Login (single-org, multi-org, with org_id), Org Selection, Invalid Tokens
 - Multi-tenant isolation verification
-- Error handling (404 responses, 409 conflicts)
+- Error handling (404 responses, 409 conflicts, 401 unauthorized)
 
 ### Sample Data Utilities
 

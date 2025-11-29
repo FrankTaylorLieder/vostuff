@@ -91,5 +91,4 @@ These instructions should be followed with every interaction:
 - You should maintain a todo list of identified work that has not been
   completed in the top level `TODO.md` file, marking items as done when they are
   completed.
-
-
+- Always update the README when making changes to the API, test tools, deployment process or other user aftecting changes.
