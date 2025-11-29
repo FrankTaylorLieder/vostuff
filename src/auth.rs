@@ -30,15 +30,24 @@ impl PasswordHasher {
     }
 }
 
-/// JWT token claims
+/// JWT token claims for authenticated users
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
+    pub sub: Uuid,              // Subject (user ID)
+    pub identity: String,       // User identity (email)
+    pub organization_id: Uuid,  // Selected organization
+    pub roles: Vec<String>,     // User roles in this organization
+    pub iat: i64,              // Issued at
+    pub exp: i64,              // Expiration time
+}
+
+/// Follow-on token claims for org selection (short-lived)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FollowOnClaims {
     pub sub: Uuid,         // Subject (user ID)
     pub identity: String,  // User identity (email)
-    pub roles: Vec<String>, // User roles (USER, ADMIN)
-    pub organizations: Vec<Uuid>, // Organizations user belongs to
     pub iat: i64,         // Issued at
-    pub exp: i64,         // Expiration time
+    pub exp: i64,         // Expiration time (5 minutes)
 }
 
 /// JWT token manager
@@ -64,13 +73,13 @@ impl TokenManager {
         }
     }
 
-    /// Generate a JWT token for a user
+    /// Generate a JWT token for a user with selected organization
     pub fn generate_token(
         &self,
         user_id: Uuid,
         identity: String,
+        organization_id: Uuid,
         roles: Vec<String>,
-        organizations: Vec<Uuid>,
         expires_in_hours: i64,
     ) -> Result<String> {
         let now = Utc::now();
@@ -79,14 +88,42 @@ impl TokenManager {
         let claims = Claims {
             sub: user_id,
             identity,
+            organization_id,
             roles,
-            organizations,
             iat: now.timestamp(),
             exp: exp.timestamp(),
         };
 
         encode(&Header::default(), &claims, &self.encoding_key)
             .map_err(|e| anyhow!("Failed to generate token: {}", e))
+    }
+
+    /// Generate a follow-on token for org selection (5 minute expiry)
+    pub fn generate_follow_on_token(
+        &self,
+        user_id: Uuid,
+        identity: String,
+    ) -> Result<String> {
+        let now = Utc::now();
+        let exp = now + Duration::minutes(5);
+
+        let claims = FollowOnClaims {
+            sub: user_id,
+            identity,
+            iat: now.timestamp(),
+            exp: exp.timestamp(),
+        };
+
+        encode(&Header::default(), &claims, &self.encoding_key)
+            .map_err(|e| anyhow!("Failed to generate follow-on token: {}", e))
+    }
+
+    /// Validate a follow-on token
+    pub fn validate_follow_on_token(&self, token: &str) -> Result<FollowOnClaims> {
+        let token_data = decode::<FollowOnClaims>(token, &self.decoding_key, &self.validation)
+            .map_err(|e| anyhow!("Failed to validate follow-on token: {}", e))?;
+
+        Ok(token_data.claims)
     }
 
     /// Validate and decode a JWT token
@@ -103,8 +140,8 @@ impl TokenManager {
 pub struct AuthContext {
     pub user_id: Uuid,
     pub identity: String,
+    pub organization_id: Uuid,
     pub roles: Vec<String>,
-    pub organizations: Vec<Uuid>,
     pub is_authenticated: bool,
 }
 
@@ -114,8 +151,8 @@ impl AuthContext {
         Self {
             user_id: Uuid::nil(),
             identity: String::new(),
+            organization_id: Uuid::nil(),
             roles: Vec::new(),
-            organizations: Vec::new(),
             is_authenticated: false,
         }
     }
@@ -125,15 +162,20 @@ impl AuthContext {
         Self {
             user_id: claims.sub,
             identity: claims.identity,
+            organization_id: claims.organization_id,
             roles: claims.roles,
-            organizations: claims.organizations,
             is_authenticated: true,
         }
     }
 
-    /// Check if user belongs to a specific organization
+    /// Check if user belongs to a specific organization (matches their selected org)
     pub fn has_org_access(&self, org_id: Uuid) -> bool {
-        self.is_authenticated && self.organizations.contains(&org_id)
+        self.is_authenticated && self.organization_id == org_id
+    }
+
+    /// Get the user's selected organization ID
+    pub fn organization_id(&self) -> Uuid {
+        self.organization_id
     }
 
     /// Check if user is authenticated
@@ -173,18 +215,33 @@ mod tests {
         let manager = TokenManager::new("test_secret_key_for_testing");
         let user_id = Uuid::new_v4();
         let identity = "test@example.com".to_string();
+        let org_id = Uuid::new_v4();
         let roles = vec!["USER".to_string(), "ADMIN".to_string()];
-        let organizations = vec![Uuid::new_v4()];
 
         // Generate token
-        let token = manager.generate_token(user_id, identity.clone(), roles.clone(), organizations.clone(), 24).unwrap();
+        let token = manager.generate_token(user_id, identity.clone(), org_id, roles.clone(), 24).unwrap();
 
         // Validate token
         let claims = manager.validate_token(&token).unwrap();
         assert_eq!(claims.sub, user_id);
         assert_eq!(claims.identity, identity);
+        assert_eq!(claims.organization_id, org_id);
         assert_eq!(claims.roles, roles);
-        assert_eq!(claims.organizations, organizations);
+    }
+
+    #[test]
+    fn test_follow_on_token() {
+        let manager = TokenManager::new("test_secret_key_for_testing");
+        let user_id = Uuid::new_v4();
+        let identity = "test@example.com".to_string();
+
+        // Generate follow-on token
+        let token = manager.generate_follow_on_token(user_id, identity.clone()).unwrap();
+
+        // Validate token
+        let claims = manager.validate_follow_on_token(&token).unwrap();
+        assert_eq!(claims.sub, user_id);
+        assert_eq!(claims.identity, identity);
     }
 
     #[test]
@@ -195,13 +252,14 @@ mod tests {
         let context = AuthContext {
             user_id: Uuid::new_v4(),
             identity: "test@example.com".to_string(),
+            organization_id: org_id,
             roles: vec!["USER".to_string(), "ADMIN".to_string()],
-            organizations: vec![org_id],
             is_authenticated: true,
         };
 
         assert!(context.has_org_access(org_id));
         assert!(!context.has_org_access(other_org_id));
+        assert_eq!(context.organization_id(), org_id);
         assert!(context.is_authenticated());
         assert!(context.has_role("USER"));
         assert!(context.has_role("ADMIN"));

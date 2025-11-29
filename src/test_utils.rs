@@ -26,14 +26,14 @@ impl<'a> SampleDataLoader<'a> {
         let coke_id = self.create_org("Coke", "Coca-Cola Organization").await?;
         let pepsi_id = self.create_org("Pepsi", "PepsiCo Organization").await?;
 
-        // Create users with passwords and roles
+        // Create users with passwords
         // Bob is a regular user, Alice is an admin
-        let bob_id = self.create_user("Bob", "bob@coke.com", Some("secret123"), vec!["USER".to_string()]).await?;
-        let alice_id = self.create_user("Alice", "alice@pepsi.com", Some("secret123"), vec!["USER".to_string(), "ADMIN".to_string()]).await?;
+        let bob_id = self.create_user("Bob", "bob@coke.com", Some("secret123")).await?;
+        let alice_id = self.create_user("Alice", "alice@pepsi.com", Some("secret123")).await?;
 
-        // Associate users with orgs
-        self.add_user_to_org(bob_id, coke_id).await?;
-        self.add_user_to_org(alice_id, pepsi_id).await?;
+        // Associate users with orgs and assign roles
+        self.add_user_to_org(bob_id, coke_id, vec!["USER".to_string()]).await?;
+        self.add_user_to_org(alice_id, pepsi_id, vec!["USER".to_string(), "ADMIN".to_string()]).await?;
 
         // Create locations for each org
         let coke_locations = self.create_locations(coke_id).await?;
@@ -77,35 +77,36 @@ impl<'a> SampleDataLoader<'a> {
         Ok(rec.id)
     }
 
-    async fn create_user(&self, name: &str, identity: &str, password: Option<&str>, roles: Vec<String>) -> Result<Uuid> {
+    async fn create_user(&self, name: &str, identity: &str, password: Option<&str>) -> Result<Uuid> {
         let password_hash = match password {
             Some(pwd) => Some(PasswordHasher::hash_password(pwd)?),
             None => None,
         };
 
         let row = sqlx::query(
-            "INSERT INTO users (name, identity, password_hash, roles) VALUES ($1, $2, $3, $4) RETURNING id"
+            "INSERT INTO users (name, identity, password_hash) VALUES ($1, $2, $3) RETURNING id"
         )
         .bind(name)
         .bind(identity)
         .bind(password_hash)
-        .bind(&roles)
         .fetch_one(self.pool)
         .await?;
 
         let id: Uuid = row.get("id");
-        println!("  ✓ Created user: {} ({}) with roles: {:?}", name, identity, roles);
+        println!("  ✓ Created user: {} ({})", name, identity);
         Ok(id)
     }
 
-    async fn add_user_to_org(&self, user_id: Uuid, org_id: Uuid) -> Result<()> {
-        sqlx::query!(
-            "INSERT INTO user_organizations (user_id, organization_id) VALUES ($1, $2)",
-            user_id,
-            org_id
+    async fn add_user_to_org(&self, user_id: Uuid, org_id: Uuid, roles: Vec<String>) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO user_organizations (user_id, organization_id, roles) VALUES ($1, $2, $3)"
         )
+        .bind(user_id)
+        .bind(org_id)
+        .bind(&roles)
         .execute(self.pool)
         .await?;
+        println!("  ✓ Added user to organization with roles: {:?}", roles);
         Ok(())
     }
 

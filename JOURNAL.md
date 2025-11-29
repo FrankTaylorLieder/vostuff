@@ -371,3 +371,101 @@
   - Database constraint ensures only valid roles can be stored
 
 All role functionality working correctly with full integration across database, API, authentication, and admin interfaces. Complete test coverage with 37 passing integration tests. System ready for future authorization implementation.
+
+## 2025-11-29 - Organization-Specific Roles and Enhanced Login Flow
+
+**Prompt:** "Let's make a change. The roles for a user should be associated with the user in a specific org, not with the user themselves. Can you move the association to the user_organization table. Further, can you enable user login to select which org they are logging in to, recording the org in the authentication token and getting the relevant roles in the org for the user." followed by request for flexible login with optional org ID, and organization selection flow for multi-org users.
+
+**Claude's Response:**
+- **Database Schema Migration**:
+  - Created migration `migrations/20241129100000_move_roles_to_user_organizations.sql`
+  - Moved `roles TEXT[]` column from `users` table to `user_organizations` table
+  - Added GIN index on `user_organizations.roles` for efficient lookups
+  - Added check constraint to ensure valid roles (USER, ADMIN) at org level
+  - Migrated existing role data from users to all their organization memberships
+  - Dropped roles column from users table
+
+- **Data Models Updated** (`src/api/models.rs`):
+  - Removed `roles` field from `User` struct (roles now org-specific)
+  - Added `roles: Vec<String>` to `UserOrganization` struct
+  - Updated `LoginRequest` to accept optional `organization_id` parameter
+  - Created new `OrgSelectionResponse` model for multi-org users
+  - Created new `OrganizationWithRoles` model showing org + user's roles in that org
+  - Created new `SelectOrgRequest` model for org selection endpoint
+  - Created `AddUserToOrgRequest` model with optional roles
+  - Created `UpdateUserOrgRolesRequest` model for updating org-specific roles
+  - Updated `UserInfo` to contain single `Organization` and `roles` (for selected org)
+
+- **Authentication System Refactoring**:
+  - Updated JWT `Claims` in `src/auth.rs`:
+    - Changed from `organizations: Vec<Uuid>` to `organization_id: Uuid` (single selected org)
+    - Roles now represent user's roles in the selected organization
+  - Created new `FollowOnClaims` struct for temporary 5-minute org selection tokens
+  - Updated `TokenManager` with new methods:
+    - `generate_follow_on_token()` - Creates short-lived token for org selection
+    - `validate_follow_on_token()` - Validates org selection tokens
+  - Updated `AuthContext` to work with single organization:
+    - `has_org_access()` - Checks if user has access to specific org
+    - `organization_id()` - Returns user's selected organization
+    - Roles are now organization-specific
+
+- **Enhanced Login Flow** (`src/api/handlers/auth.rs`):
+  - Implemented flexible three-scenario login:
+    1. **Org ID provided**: Direct authentication with that organization's roles
+    2. **No org ID + Single org membership**: Auto-select the user's only organization
+    3. **No org ID + Multiple orgs**: Return list of orgs with roles + follow-on token
+  - Login endpoint queries user's organizations with roles from `user_organizations` table
+  - Returns 403 FORBIDDEN if user is not member of any organization
+  - New `/api/auth/select-org` endpoint:
+    - Accepts follow-on token and organization ID
+    - Validates user membership in selected org
+    - Returns final JWT token with org-specific roles
+    - Verifies org selection within 5-minute window
+
+- **Admin API Updates**:
+  - Updated all user CRUD endpoints (`src/api/handlers/users.rs`):
+    - Removed roles from user creation/update (roles now managed per-org)
+    - `add_user_to_organization` - Now accepts optional roles, defaults to [USER]
+    - Created new `update_user_org_roles` endpoint (PATCH /api/admin/users/{user_id}/organizations/{org_id})
+    - Updated `list_organization_users` to remove roles column from query
+  - Added routes to API server:
+    - POST `/api/admin/users/{user_id}/organizations/{org_id}` - Add user to org with roles
+    - PATCH `/api/admin/users/{user_id}/organizations/{org_id}` - Update user's roles in org
+    - POST `/api/auth/select-org` - Complete authentication after org selection
+
+- **Sample Data Generator** (`src/test_utils.rs`):
+  - Removed roles parameter from `create_user` method
+  - Updated `add_user_to_org` to accept `roles: Vec<String>` parameter
+  - Modified sample data:
+    - Bob (bob@coke.com) - Added to Coke org with USER role
+    - Alice (alice@pepsi.com) - Added to Pepsi org with USER and ADMIN roles
+  - Used non-macro `sqlx::query()` to avoid compile-time checking before migration
+
+- **Integration Tests** (`tests/api_tests.rs`):
+  - Updated 6 role-related tests to work with new architecture:
+    - Removed assertions about user.roles (no longer exists)
+    - Updated `test_admin_add_user_to_organization` to send roles in request body
+    - Updated `test_auth_login_success` to add user to org before login
+  - All 37 integration tests passing with updated assertions
+  - Tests verify org-specific role behavior correctly
+
+- **End-to-End Testing Results**:
+  - Verified Bob's login (single org):
+    - Auto-selects Coke organization
+    - Returns token with `organization_id` and `roles: ["USER"]`
+    - UserInfo contains selected organization details
+  - Verified Alice's login (single org):
+    - Auto-selects Pepsi organization
+    - Returns token with `organization_id` and `roles: ["USER", "ADMIN"]`
+    - Roles are specific to Pepsi organization
+  - JWT tokens now contain single organization context instead of list
+  - Organization selection flow ready for multi-org users
+
+- **Technical Implementation Details**:
+  - Database migration safely moved data without loss
+  - Fixed compile-time SQLx validation by using non-macro queries where needed
+  - Roles are now truly multi-tenant - same user can have different roles in different orgs
+  - Follow-on tokens prevent organization selection attacks (5-minute expiry)
+  - Backward compatible error handling for users without organizations
+
+**Impact**: Major architectural improvement enabling true organization-specific role-based access control. Users can now have different roles in different organizations (e.g., ADMIN in one org, USER in another). The flexible login flow supports both single-org and multi-org users seamlessly. All 37 integration tests passing. System ready for multi-organization role-based authorization implementation.

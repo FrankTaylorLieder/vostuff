@@ -53,9 +53,11 @@ use vostuff::api::{
         users::delete_user,
         users::list_user_organizations,
         users::add_user_to_organization,
+        users::update_user_org_roles,
         users::remove_user_from_organization,
         // Authentication
         auth::login,
+        auth::select_org,
     ),
     components(
         schemas(
@@ -66,9 +68,9 @@ use vostuff::api::{
             Collection, CreateCollectionRequest,
             Tag, CreateTagRequest,
             Organization, CreateOrganizationRequest, UpdateOrganizationRequest,
-            User, CreateUserRequest, UpdateUserRequest,
-            UserOrganization,
-            LoginRequest, LoginResponse, UserInfo,
+            User, CreateUserRequest, UpdateUserRequest, UserRole,
+            UserOrganization, AddUserToOrgRequest, UpdateUserOrgRolesRequest,
+            LoginRequest, LoginResponse, OrgSelectionResponse, SelectOrgRequest, UserInfo, OrganizationWithRoles,
             ErrorResponse,
             PaginationParams, PaginatedResponse<Item>,
         )
@@ -153,9 +155,11 @@ async fn main() -> anyhow::Result<()> {
         // Admin - User Organizations
         .route("/admin/users/:user_id/organizations", get(users::list_user_organizations))
         .route("/admin/users/:user_id/organizations/:org_id", post(users::add_user_to_organization))
+        .route("/admin/users/:user_id/organizations/:org_id", patch(users::update_user_org_roles))
         .route("/admin/users/:user_id/organizations/:org_id", delete(users::remove_user_from_organization))
-        // Authentication (public endpoint)
+        // Authentication (public endpoints)
         .route("/auth/login", post(auth::login))
+        .route("/auth/select-org", post(auth::select_org))
         .with_state(state.clone())
         // Add auth middleware to extract tokens from headers
         .layer(middleware::from_fn_with_state(state, auth_middleware));

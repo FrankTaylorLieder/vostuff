@@ -220,7 +220,6 @@ pub struct User {
     pub identity: String,
     #[serde(skip_serializing)] // Never serialize password hash
     pub password_hash: Option<String>,
-    pub roles: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -231,8 +230,6 @@ pub struct CreateUserRequest {
     pub identity: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub roles: Option<Vec<UserRole>>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -241,8 +238,6 @@ pub struct UpdateUserRequest {
     pub identity: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub roles: Option<Vec<UserRole>>,
 }
 
 // Authentication models
@@ -250,6 +245,8 @@ pub struct UpdateUserRequest {
 pub struct LoginRequest {
     pub identity: String,
     pub password: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub organization_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -260,12 +257,32 @@ pub struct LoginResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+pub struct OrgSelectionResponse {
+    pub organizations: Vec<OrganizationWithRoles>,
+    pub follow_on_token: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OrganizationWithRoles {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub roles: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SelectOrgRequest {
+    pub follow_on_token: String,
+    pub organization_id: Uuid,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct UserInfo {
     pub id: Uuid,
     pub name: String,
     pub identity: String,
+    pub organization: Organization,
     pub roles: Vec<String>,
-    pub organizations: Vec<Organization>,
 }
 
 // User organization membership
@@ -273,7 +290,19 @@ pub struct UserInfo {
 pub struct UserOrganization {
     pub user_id: Uuid,
     pub organization_id: Uuid,
+    pub roles: Vec<String>,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AddUserToOrgRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub roles: Option<Vec<UserRole>>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateUserOrgRolesRequest {
+    pub roles: Vec<UserRole>,
 }
 
 // Error response

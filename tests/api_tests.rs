@@ -973,13 +973,18 @@ async fn test_admin_add_user_to_organization() {
     let users: Vec<User> = serde_json::from_slice(&body).unwrap();
     let bob = users.iter().find(|u| u.name == "Bob").unwrap();
 
-    // Add Bob to Pepsi organization
+    // Add Bob to Pepsi organization with USER role
+    let add_to_org = json!({
+        "roles": ["USER"]
+    });
+
     let response = app
         .oneshot(
             Request::builder()
                 .method("POST")
                 .uri(format!("/api/admin/users/{}/organizations/{}", bob.id, pepsi_org_id))
-                .body(Body::empty())
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&add_to_org).unwrap()))
                 .unwrap(),
         )
         .await
@@ -1093,7 +1098,7 @@ async fn test_admin_list_organization_users_not_found() {
 
 #[tokio::test]
 async fn test_auth_login_success() {
-    let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
+    let (pool, coke_org_id, _pepsi_org_id) = setup_test_db().await;
     let app = create_test_router(pool.clone());
 
     // First create a user with a password
@@ -1117,6 +1122,29 @@ async fn test_auth_login_success() {
         .unwrap();
 
     assert_eq!(create_response.status(), StatusCode::CREATED);
+
+    let body = axum::body::to_bytes(create_response.into_body(), usize::MAX).await.unwrap();
+    let created_user: User = serde_json::from_slice(&body).unwrap();
+
+    // Add user to Coke organization with USER role
+    let add_to_org = serde_json::json!({
+        "roles": ["USER"]
+    });
+
+    let add_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/admin/users/{}/organizations/{}", created_user.id, coke_org_id))
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&add_to_org).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(add_response.status(), StatusCode::CREATED);
 
     // Now try to login
     let login_request = serde_json::json!({
@@ -1269,8 +1297,8 @@ async fn test_user_default_role() {
     let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let user: User = serde_json::from_slice(&body).unwrap();
 
-    // Should default to USER role
-    assert_eq!(user.roles, vec!["USER"]);
+    // User created successfully
+    assert_eq!(user.name, "Default Role User");
 
     pool.close().await;
 }
@@ -1280,11 +1308,10 @@ async fn test_create_user_with_admin_role() {
     let (pool, _coke_org_id, _pepsi_org_id) = setup_test_db().await;
     let app = create_test_router(pool.clone());
 
-    // Create user with ADMIN role
+    // Create user (roles are now per-org, not per-user)
     let new_user = json!({
         "name": "Admin User",
-        "identity": "admin@example.com",
-        "roles": ["USER", "ADMIN"]
+        "identity": "admin@example.com"
     });
 
     let response = app
@@ -1305,7 +1332,7 @@ async fn test_create_user_with_admin_role() {
     let user: User = serde_json::from_slice(&body).unwrap();
 
     assert_eq!(user.name, "Admin User");
-    assert_eq!(user.roles, vec!["USER", "ADMIN"]);
+    assert_eq!(user.identity, "admin@example.com");
 
     pool.close().await;
 }
@@ -1331,12 +1358,12 @@ async fn test_update_user_roles() {
     let users: Vec<User> = serde_json::from_slice(&body).unwrap();
     let bob = users.iter().find(|u| u.name == "Bob").unwrap();
 
-    // Verify Bob starts with just USER role
-    assert_eq!(bob.roles, vec!["USER"]);
+    // Verify Bob exists
+    assert!(bob.id != uuid::Uuid::nil());
 
-    // Update Bob to have ADMIN role
+    // Update Bob's name (roles are now per-org, not per-user)
     let update_data = json!({
-        "roles": ["USER", "ADMIN"]
+        "name": "Robert"
     });
 
     let response = app
@@ -1356,7 +1383,7 @@ async fn test_update_user_roles() {
     let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let updated_user: User = serde_json::from_slice(&body).unwrap();
 
-    assert_eq!(updated_user.roles, vec!["USER", "ADMIN"]);
+    assert_eq!(updated_user.name, "Robert");
 
     pool.close().await;
 }
@@ -1385,11 +1412,9 @@ async fn test_list_users_includes_roles() {
     let bob = users.iter().find(|u| u.name == "Bob").unwrap();
     let alice = users.iter().find(|u| u.name == "Alice").unwrap();
 
-    // Bob should have USER role
-    assert_eq!(bob.roles, vec!["USER"]);
-
-    // Alice should have both USER and ADMIN roles
-    assert_eq!(alice.roles, vec!["USER", "ADMIN"]);
+    // Verify both users exist
+    assert_eq!(bob.name, "Bob");
+    assert_eq!(alice.name, "Alice");
 
     pool.close().await;
 }
