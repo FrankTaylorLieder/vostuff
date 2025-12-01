@@ -142,7 +142,7 @@ The UI will be built on Leptos:
     - This ensures the API is kept usable by other clients.
     - Provide good separation between the client and server elements of the
     solution.
-- The application will use Tailwind CSS for styling.
+- The application will use custom CSS for styling.
 
 ### Layout
 

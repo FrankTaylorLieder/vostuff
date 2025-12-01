@@ -1,0 +1,24 @@
+[package]
+name = "vostuff-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Database
+sqlx = { workspace = true }
+
+# Authentication
+argon2 = { workspace = true }
+jsonwebtoken = { workspace = true }
+
+# Common types
+uuid = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+
+# OpenAPI (for model schemas)
+utoipa = { workspace = true }

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use sqlx::PgPool;
 use std::env;
-use vostuff::test_utils::SampleDataLoader;
+use vostuff_api::test_utils::SampleDataLoader;
 
 #[tokio::main]
 async fn main() -> Result<()> {

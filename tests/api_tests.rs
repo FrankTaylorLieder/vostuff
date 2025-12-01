@@ -10,8 +10,8 @@ use sqlx::PgPool;
 use std::env;
 use tower::ServiceExt;
 use uuid::Uuid;
-use vostuff::api::{models::*, state::AppState};
-use vostuff::schema::SchemaManager;
+use vostuff_api::api::{models::*, state::AppState};
+use vostuff_api::schema::SchemaManager;
 
 use common::SampleDataLoader;
 

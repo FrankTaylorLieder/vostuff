@@ -1,0 +1,57 @@
+[package]
+name = "vostuff-web"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Internal dependencies
+vostuff-core = { path = "../vostuff-core" }
+
+# Leptos SSR + Hydration
+leptos = { version = "0.7", default-features = false }
+leptos_axum = { version = "0.7", optional = true }
+leptos_router = { version = "0.7", default-features = false }
+leptos_meta = { version = "0.7", default-features = false }
+
+# Web server (server-side only)
+axum = { workspace = true, optional = true }
+tower = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true, features = ["fs", "compression-gzip"] }
+tokio = { workspace = true, optional = true }
+
+# WASM (client-side only)
+wasm-bindgen = { workspace = true }
+console_error_panic_hook = { workspace = true }
+web-sys = { workspace = true, features = ["Window", "Document", "Storage"] }
+
+# Shared dependencies
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+# HTTP client for server functions
+reqwest = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+[features]
+default = ["ssr"]
+hydrate = ["leptos/hydrate"]
+ssr = [
+    "leptos/ssr",
+    "dep:leptos_axum",
+    "dep:axum",
+    "dep:tower",
+    "dep:tower-http",
+    "dep:tokio",
+]
+
+[[bin]]
+name = "web-server"
+path = "src/main.rs"
+required-features = ["ssr"]

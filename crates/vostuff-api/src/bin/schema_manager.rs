@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::env;
 
-use vostuff::schema::SchemaManager;
+use vostuff_api::schema::SchemaManager;
 
 #[derive(Parser)]
 #[command(name = "schema-manager")]

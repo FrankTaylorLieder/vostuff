@@ -10,7 +10,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-use vostuff::api::{
+use vostuff_api::api::{
     handlers::{auth, collections, items, locations, organizations, tags, users},
     middleware::auth_middleware,
     models::*,
