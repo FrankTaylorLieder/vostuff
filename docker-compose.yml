@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # PostgreSQL database
   postgres:
     image: postgres:16-alpine
     container_name: vostuff-postgres
@@ -19,7 +20,66 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - vostuff-network
+
+  # Database migrations (runs once on startup)
+  migrations:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: vostuff-migrations
+    environment:
+      DATABASE_URL: postgresql://vostuff:vostuff_dev_password@postgres:5432/vostuff_dev
+    command: ["schema-manager", "migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - vostuff-network
+
+  # REST API server
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: vostuff-api
+    environment:
+      DATABASE_URL: postgresql://vostuff:vostuff_dev_password@postgres:5432/vostuff_dev
+      JWT_SECRET: ${JWT_SECRET:-dev_secret_key_change_in_production}
+      RUST_LOG: ${RUST_LOG:-info}
+    ports:
+      - "8080:8080"
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - vostuff-network
+
+  # Leptos web application
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: vostuff-web
+    environment:
+      API_BASE_URL: http://api:8080
+      LEPTOS_SITE_ADDR: 0.0.0.0:3001
+      RUST_LOG: ${RUST_LOG:-info}
+    ports:
+      - "3001:3001"
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - vostuff-network
 
 volumes:
   postgres_data:
     driver: local
+
+networks:
+  vostuff-network:
+    driver: bridge

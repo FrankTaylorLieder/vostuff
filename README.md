@@ -29,8 +29,14 @@ A three-tier Rust application for tracking collections of stuff - vinyl records,
   - Type-safe request/response models
   - Comprehensive error handling
 
+- **Web UI**: Leptos SSR web application with:
+  - User authentication with JWT tokens stored in HTTP-only cookies
+  - Multi-organization login flow with automatic or manual org selection
+  - Protected routes with authentication context
+  - Clean, responsive UI with custom CSS
+  - Server functions that call the REST API
+
 ### Planned
-- Web UI (Leptos with SSR)
 - OIDC Authentication integration
 
 ## Prerequisites
@@ -38,6 +44,7 @@ A three-tier Rust application for tracking collections of stuff - vinyl records,
 - Rust 1.86.0 or later (edition 2024)
 - Docker and Docker Compose
 - PostgreSQL client tools (optional, for manual database access)
+- cargo-leptos (for running the web UI): `cargo install cargo-leptos`
 
 ## Getting Started
 
@@ -60,6 +67,7 @@ The default configuration connects to the Docker PostgreSQL instance:
 ```
 DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev
 JWT_SECRET=your_secret_key_here_change_in_production
+API_BASE_URL=http://localhost:8080
 ```
 
 **Important Security Notes:**
@@ -68,6 +76,7 @@ JWT_SECRET=your_secret_key_here_change_in_production
   - **MUST be changed in production** to a strong, randomly generated secret
   - Used for signing and validating JWT tokens for user authentication
   - If not set, defaults to a development-only secret (insecure for production)
+- `API_BASE_URL`: Base URL for the REST API (used by the web server to call API endpoints)
 
 ### 3. Start the Database
 
@@ -113,6 +122,117 @@ docker-compose ps
 ```
 
 You should see the `vostuff-postgres` container with status "Up (healthy)".
+
+## Docker Deployment
+
+The entire application stack can be run using Docker Compose, which orchestrates the database, API server, and web UI together.
+
+### Running with Docker Compose
+
+```bash
+# Build and start all services
+docker-compose up --build
+
+# Or run in background (detached mode)
+docker-compose up -d --build
+
+# View logs
+docker-compose logs -f
+
+# View logs for a specific service
+docker-compose logs -f api
+docker-compose logs -f web
+
+# Stop all services
+docker-compose down
+
+# Stop and remove volumes (WARNING: deletes all data)
+docker-compose down -v
+```
+
+### What Gets Started
+
+The Docker Compose configuration starts four services:
+
+1. **postgres** - PostgreSQL 16 database
+   - Port: 5432
+   - Includes healthcheck for startup coordination
+
+2. **migrations** - Database schema initialization
+   - Runs `schema-manager migrate` once on startup
+   - Creates all tables, indexes, and triggers
+   - Waits for postgres to be healthy before running
+
+3. **api** - REST API server
+   - Port: 8080
+   - Swagger UI: http://localhost:8080/swagger-ui
+   - Waits for migrations to complete before starting
+
+4. **web** - Leptos web application
+   - Port: 3001
+   - Web UI: http://localhost:3001
+   - Waits for API server to be available
+
+### Environment Variables
+
+You can customize the deployment with a `.env` file:
+
+```bash
+# JWT secret (IMPORTANT: change in production)
+JWT_SECRET=your_strong_secret_key_here
+
+# Logging level
+RUST_LOG=info
+```
+
+The database credentials are set in `docker-compose.yml` and should be changed for production deployments.
+
+### Accessing the Application
+
+Once all services are running:
+
+- **Web UI**: http://localhost:3001
+- **REST API**: http://localhost:8080
+- **Swagger UI**: http://localhost:8080/swagger-ui
+- **PostgreSQL**: localhost:5432
+
+### Loading Sample Data
+
+To load sample data into the Dockerized environment:
+
+```bash
+# Connect to the API container and run the sample data loader
+docker exec -it vostuff-api load-sample-data
+```
+
+### Rebuilding After Code Changes
+
+```bash
+# Rebuild and restart specific services
+docker-compose up -d --build api
+docker-compose up -d --build web
+
+# Or rebuild everything
+docker-compose up -d --build
+```
+
+### Docker Build Details
+
+The application uses two multi-stage Dockerfiles:
+
+- **Dockerfile.api** - Builds the API server and schema-manager binaries
+  - Uses Rust 1.86 for compilation (required for edition 2024 support)
+  - Produces optimized release binaries
+  - Final image based on Debian Bookworm Slim
+
+- **Dockerfile.web** - Builds the Leptos web application
+  - Uses Rust 1.86 for compilation (required for edition 2024 support)
+  - Installs cargo-leptos for building
+  - Compiles both server binary and WASM client code
+  - Includes static assets (CSS, JS, WASM)
+  - Final image based on Debian Bookworm Slim
+
+Initial build time is approximately 5-10 minutes due to Rust compilation, but Docker layer caching significantly speeds up subsequent builds.
 
 ## Development Commands
 
@@ -161,6 +281,39 @@ cargo run --bin api-server
 # Swagger UI available at http://localhost:8080/swagger-ui
 ```
 
+### Web UI
+
+The web UI is built with Leptos and uses cargo-leptos for development and building.
+
+```bash
+# Install cargo-leptos (if not already installed)
+cargo install cargo-leptos
+
+# Run the web UI in development mode (with hot reload)
+cargo leptos watch
+
+# The web server will start on http://localhost:3001
+# The API server must be running on http://localhost:8080
+
+# Build the web UI for production
+cargo leptos build --release
+
+# Run the production build
+cargo leptos serve --release
+```
+
+**Environment Variables for Web Server:**
+- `DATABASE_URL`: PostgreSQL connection string (required)
+- `JWT_SECRET`: Secret for validating JWT tokens (required)
+- `API_BASE_URL`: URL of the REST API server (default: http://localhost:8080)
+
+The web UI provides:
+- User authentication with login page
+- Multi-organization support with automatic or manual org selection
+- Protected dashboard page (requires authentication)
+- Logout functionality
+- JWT tokens stored in HTTP-only cookies for security
+
 ### Testing and Quality
 
 ```bash
@@ -190,19 +343,27 @@ cargo fmt
 
 ```
 vostuff/
+├── crates/                  # Workspace members
+│   ├── vostuff-core/       # Shared code (auth, models)
+│   ├── vostuff-api/        # REST API server
+│   └── vostuff-web/        # Leptos web UI
+│       ├── src/
+│       │   ├── main.rs     # Web server entry point
+│       │   ├── lib.rs      # Leptos app library
+│       │   ├── app.rs      # Root app component
+│       │   ├── pages/      # Page components
+│       │   ├── components/ # Reusable components
+│       │   └── server_fns/ # Server functions
+│       ├── style/          # CSS styles
+│       └── assets/         # Static assets
 ├── migrations/              # SQL migration files (sqlx)
 │   └── 20240101000000_initial_schema.sql
 ├── scripts/                 # Helper scripts
 │   └── init-db.sh          # Database initialization
-├── src/
-│   ├── bin/
-│   │   └── schema_manager.rs  # Schema management CLI
-│   ├── lib.rs              # Library root
-│   ├── main.rs             # Main application
-│   └── schema.rs           # Schema management module
 ├── requirements/
 │   └── functional.md       # Functional requirements
 ├── docker-compose.yml      # PostgreSQL container config
+├── Leptos.toml             # cargo-leptos configuration
 ├── CLAUDE.md              # Development guidelines
 ├── JOURNAL.md             # Development journal
 ├── TODO.md                # Task tracking
@@ -570,7 +731,7 @@ VOStuff is designed as a three-tier application:
 
 1. **Database Layer** (PostgreSQL) - ✅ Complete
 2. **API Layer** (Axum REST API) - ✅ Complete
-3. **UI Layer** (Leptos SSR) - 🚧 Planned
+3. **UI Layer** (Leptos SSR) - ✅ Complete
 
 ### Multi-Tenancy
 

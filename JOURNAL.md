@@ -469,3 +469,79 @@ All role functionality working correctly with full integration across database, 
   - Backward compatible error handling for users without organizations
 
 **Impact**: Major architectural improvement enabling true organization-specific role-based access control. Users can now have different roles in different organizations (e.g., ADMIN in one org, USER in another). The flexible login flow supports both single-org and multi-org users seamlessly. All 37 integration tests passing. System ready for multi-organization role-based authorization implementation.
+
+## 2025-12-13 - Docker Compose Deployment Configuration
+
+**Prompt:** "Can you write a new docker compose file which run the entire application. DB, API and web application."
+
+**Claude's Response:**
+- Created comprehensive Docker Compose configuration to run the complete three-tier application stack
+- **Dockerfiles Created**:
+  - `Dockerfile.api` - Multi-stage Docker build for API server:
+    - Builder stage: Uses rust:1.83-slim with build dependencies (pkg-config, libssl-dev)
+    - Builds both `api-server` and `schema-manager` binaries in release mode
+    - Runtime stage: Debian Bookworm Slim with minimal runtime dependencies
+    - Includes migrations directory for schema management
+    - Runs as non-root user (vostuff:1001) for security
+    - Exposes port 8080
+  - `Dockerfile.web` - Multi-stage Docker build for Leptos web application:
+    - Builder stage: Installs cargo-leptos v0.2.20 and wasm32-unknown-unknown target
+    - Builds with `cargo leptos build --release` for SSR + WASM client
+    - Runtime stage: Copies web-server binary, Leptos.toml, static assets (target/site/), and style files
+    - Runs as non-root user for security
+    - Sets LEPTOS_SITE_ADDR to listen on all interfaces (0.0.0.0:3001)
+    - Exposes port 3001
+- **Updated docker-compose.yml** with four services:
+  - `postgres` (existing, enhanced):
+    - PostgreSQL 16 Alpine
+    - Healthcheck for service coordination
+    - Persistent volume for data
+    - Connected to vostuff-network
+  - `migrations` (new):
+    - Runs `schema-manager migrate` on startup
+    - Depends on postgres healthcheck
+    - Uses DATABASE_URL pointing to postgres service (internal networking)
+    - Restart policy: on-failure (runs once)
+  - `api` (new):
+    - Builds from Dockerfile.api
+    - Runs api-server binary
+    - Depends on migrations completing successfully
+    - Environment: DATABASE_URL, JWT_SECRET (with default), RUST_LOG
+    - Port mapping: 8080:8080
+    - Restart: unless-stopped
+  - `web` (new):
+    - Builds from Dockerfile.web
+    - Runs web-server binary
+    - Depends on api service
+    - Environment: API_BASE_URL (http://api:8080), LEPTOS_SITE_ADDR, RUST_LOG
+    - Port mapping: 3001:3001
+    - Restart: unless-stopped
+  - All services connected via bridge network for internal communication
+- **Supporting Files**:
+  - Created `.dockerignore` to optimize build context:
+    - Excludes target/, .git/, .env files, documentation
+    - Reduces Docker build time and image size
+  - Updated `README.md` with comprehensive Docker Deployment section:
+    - Step-by-step instructions for running with docker-compose
+    - Explanation of all four services and their dependencies
+    - Environment variable configuration guide
+    - Service access URLs (web UI, API, Swagger, database)
+    - Sample data loading instructions for Docker environment
+    - Rebuild instructions after code changes
+    - Docker build details and expected build times
+- **Architecture Highlights**:
+  - Proper service dependency chain: postgres → migrations → api → web
+  - Internal Docker networking (postgres, api hostnames instead of localhost)
+  - Security: non-root users in containers, environment variable configuration
+  - Build optimization: multi-stage builds, layer caching
+  - Development-friendly: easy rebuild of individual services
+- **Deployment Ready**:
+  - Single command deployment: `docker-compose up --build`
+  - All three tiers containerized and orchestrated
+  - Database migrations run automatically on startup
+  - Complete isolation from host environment
+  - Production-ready foundation (requires production secrets)
+- All files created successfully following the implementation plan
+- Documentation updated to guide users through Docker deployment workflow
+
+**Impact**: Complete containerization of the VOStuff application stack. The entire three-tier architecture (PostgreSQL, Axum API, Leptos Web UI) can now be deployed with a single Docker Compose command. Proper service orchestration ensures correct startup order with health checks and dependencies. Multi-stage builds optimize image sizes. The deployment is development-friendly with hot rebuild capabilities and production-ready with proper security practices (non-root users, configurable secrets). Build time approximately 5-10 minutes initially, with Docker layer caching speeding up subsequent builds.

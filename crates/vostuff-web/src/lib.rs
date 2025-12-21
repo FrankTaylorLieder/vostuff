@@ -1,12 +1,17 @@
-// Leptos app will be implemented here
-#[cfg(feature = "hydrate")]
-#[wasm_bindgen::prelude::wasm_bindgen]
-pub fn hydrate() {
-    // Hydration entry point
-    console_error_panic_hook::set_once();
-}
+pub mod app;
+pub mod pages;
+pub mod components;
+pub mod server_fns;
 
-#[cfg(feature = "ssr")]
-pub fn app() {
-    // SSR app export placeholder
+use leptos::*;
+use wasm_bindgen::prelude::wasm_bindgen;
+
+pub use app::App;
+
+// Client-side hydration entry point
+#[cfg(feature = "hydrate")]
+#[wasm_bindgen]
+pub fn hydrate() {
+    console_error_panic_hook::set_once();
+    leptos::mount_to_body(App);
 }

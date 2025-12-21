@@ -23,6 +23,16 @@ of.
 - `cargo run --bin schema-manager migrate` - Run database migrations
 - `cargo run --bin schema-manager reset` - Reset database (drops all data)
 
+### API Server
+- `cargo run --bin api-server` - Run the REST API server (port 8080)
+- Swagger UI available at http://localhost:8080/swagger-ui
+
+### Web UI
+- `cargo leptos watch` - Run the web UI in development mode with hot reload (port 3001)
+- `cargo leptos build --release` - Build the web UI for production
+- `cargo leptos serve --release` - Run the production build
+- **Note**: The API server must be running for the web UI to function
+
 ### Testing and Quality
 - `cargo test` - Run all tests
 - `cargo test <test_name>` - Run a specific test
@@ -49,10 +59,21 @@ stuff or users of a another org.
 
 ## Project Structure
 
-The three tiers are contained in this one repository with the REST API and Web
-tier being two separate Rust binary applications. Any DB initialisation, data
-import and migration tools must be written in Rust and will be separate
-binaries.
+The three tiers are contained in this one repository organized as a Cargo workspace:
+
+- **crates/vostuff-core**: Shared code (authentication, models, utilities)
+- **crates/vostuff-api**: REST API server (Axum, OpenAPI, JWT auth)
+- **crates/vostuff-web**: Web UI (Leptos SSR, authentication, server functions)
+
+The REST API and Web tier are two separate Rust binary applications. Any DB initialisation,
+data import and migration tools are written in Rust as separate binaries.
+
+### Web UI Architecture
+- **Server-side rendering** with Leptos SSR for fast initial page loads
+- **Server functions** call the REST API and run only on the server
+- **JWT authentication** with tokens stored in HTTP-only cookies
+- **Protected routes** with authentication context
+- **cargo-leptos** handles WASM compilation, CSS processing, and dev server
 
 ## Development Workflow
 

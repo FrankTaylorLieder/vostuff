@@ -1,0 +1,74 @@
+# Multi-stage build for vostuff Leptos web application
+# Build stage - using nightly for cargo-leptos compatibility
+FROM rustlang/rust:nightly-slim AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    perl \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install cargo-leptos (latest version compatible with Rust 1.86)
+RUN cargo install cargo-leptos
+
+# Add wasm target
+RUN rustup target add wasm32-unknown-unknown
+
+# Set working directory
+WORKDIR /app
+
+# Copy workspace configuration
+COPY Cargo.toml Cargo.lock ./
+COPY Leptos.toml ./
+COPY crates ./crates
+
+# Copy SQLx query cache for offline mode
+COPY .sqlx ./.sqlx
+
+# Build the Leptos application with SQLx offline mode
+ENV SQLX_OFFLINE=true
+RUN cargo leptos build --release
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -m -u 1001 vostuff
+
+# Set working directory
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /app/target/release/web-server /usr/local/bin/web-server
+
+# Copy Leptos configuration
+COPY --from=builder /app/Leptos.toml ./
+
+# Copy static assets (WASM, JS, CSS)
+COPY --from=builder /app/target/site ./target/site
+
+# Copy style files
+COPY --from=builder /app/crates/vostuff-web/style ./crates/vostuff-web/style
+
+# Change ownership
+RUN chown -R vostuff:vostuff /app
+
+# Switch to non-root user
+USER vostuff
+
+# Expose web server port
+EXPOSE 3001
+
+# Set environment variable to listen on all interfaces in container
+ENV LEPTOS_SITE_ADDR="0.0.0.0:3001"
+
+# Run the web server
+CMD ["web-server"]
