@@ -1,5 +1,189 @@
 # VOStuff Project Journal
 
+## 2025-12-29 - Authentication Architecture Refactoring: JWT Validation Separation
+
+**Prompts:**
+1. "On the home page, a redirect effect is created, but not used when no user is found. Can you fix this."
+2. "Can you explain how effects are used in this page to redirect when the user is not logged in?"
+3. "When does the view display 'Redirecting to login...'. Doesn't the effect cause the redirect to happen before this is shown?"
+4. "Even with the updated code, the redirection is not happening."
+5. "This is even worse now. The console shows: [console errors about leptos features]"
+6. "I see this when running the API server: [port already in use error]"
+7. [User interrupted tool use]
+8. "I still see the 500 error from the API server. The URL being requested looks wrong... why is there a number at the end?"
+9. [User provided logs showing only basic connection info]
+10. "The API server is running. We can see the login request being processed: [successful login logs]"
+11. "It is already running with debug level... the logs above show this."
+12. "Still seeing the same 500 error. There is an auth_token cookie."
+13. "Still failing. Still not errors in the lepto output."
+14. "Here is the output: [logs showing get_current_user called and JWT_SECRET loaded]"
+15. "Why is leptos using the JWT_SECRET?"
+16. "yes" (to implement better architecture)
+17. "This is now working! Can you update the journal. Thanks."
+
+**Claude's Response:**
+
+**Initial Issue - Home Page Redirect:**
+- Fixed unused `navigate` variable in `crates/vostuff-web/src/pages/home.rs:9`
+- Changed from `create_effect` + `navigate()` to using `<Redirect path="/login"/>` component (Leptos idiomatic approach for SSR)
+- Added proper Leptos features to `Cargo.toml`:
+  - `hydrate` feature: added `leptos_router/hydrate`, `leptos_meta/hydrate`
+  - `ssr` feature: added `leptos_router/ssr`, `leptos_meta/ssr`
+
+**Debugging 500 Error on get_current_user:**
+- Fixed hardcoded INFO log level in `crates/vostuff-web/src/main.rs` to respect `RUST_LOG` environment variable
+  - Changed from `.with_max_level(tracing::Level::INFO)` to `.with_env_filter(EnvFilter::try_from_default_env())`
+- Added extensive debug logging to `get_current_user` function to trace execution flow
+- Corrected API endpoints from `/api/users/{id}` to `/api/admin/users/{id}` and `/api/organizations/{id}` to `/api/admin/organizations/{id}`
+
+**Root Cause Discovery:**
+- Token validation failing with `InvalidSignature` error
+- Issue: Web server (vostuff-web) was trying to validate JWT tokens using its own JWT_SECRET, but tokens were created by API server (vostuff-api) with potentially different JWT_SECRET
+- This created tight coupling: both servers needed to share the same secret, violating separation of concerns
+
+**Architecture Refactoring - New /api/auth/me Endpoint:**
+
+Created proper separation between API and web servers:
+
+1. **Added `/api/auth/me` endpoint to API server** (`crates/vostuff-api/src/api/handlers/auth.rs`):
+   - Accepts JWT token via Authorization header
+   - Uses existing auth middleware for token validation
+   - Extracts `AuthContext` from request extensions
+   - Fetches user and organization details from database
+   - Returns complete `UserInfo` including org and roles
+   - Returns 401 if not authenticated
+   - Added to OpenAPI documentation with security scheme
+
+2. **Updated route registration** in `crates/vostuff-api/src/bin/api_server.rs`:
+   - Added `GET /api/auth/me` route
+   - Added to OpenAPI paths list for documentation
+
+3. **Simplified get_current_user in web server** (`crates/vostuff-web/src/server_fns/auth.rs`):
+   - Removed JWT validation logic (no longer needs `vostuff_core::auth::TokenManager`)
+   - Removed JWT_SECRET dependency entirely
+   - Simplified to:
+     1. Extract auth_token from cookie
+     2. Call `GET /api/auth/me` with token
+     3. Return `None` if 401 (unauthorized)
+     4. Parse and return `UserInfo` if 200
+   - Reduced from ~130 lines to ~90 lines
+   - Added deserializer structs to handle API's fuller Organization type
+
+**Benefits of New Architecture:**
+- **Separation of concerns**: Only API server knows JWT_SECRET and validates tokens
+- **Eliminated coupling**: Web server no longer needs to be configured with JWT_SECRET
+- **Simplified web server**: No cryptographic dependencies in SSR layer
+- **Single source of truth**: Token validation logic exists only in API server
+- **Easier testing**: Can test web auth independently by mocking API responses
+- **Better security**: JWT secret only needed in one place
+
+**Technical Impact**:
+This refactoring establishes proper architectural boundaries between the web tier and API tier. The web server is now a pure client of the API, passing tokens without understanding or validating their contents. This follows the principle of least privilege - the web server only needs to store and forward tokens, not validate them. The API server maintains full control over authentication and authorization logic. This pattern is more maintainable, more secure (smaller attack surface), and easier to scale (e.g., could swap out JWT implementation without touching web server).
+
+**Files Modified:**
+- `crates/vostuff-web/src/pages/home.rs` - Fixed redirect logic
+- `crates/vostuff-web/Cargo.toml` - Added Leptos feature flags
+- `crates/vostuff-web/src/main.rs` - Fixed logging configuration
+- `crates/vostuff-web/src/server_fns/auth.rs` - Simplified get_current_user to call API
+- `crates/vostuff-api/src/api/handlers/auth.rs` - Added get_me endpoint
+- `crates/vostuff-api/src/bin/api_server.rs` - Registered /api/auth/me route
+
+## 2025-12-21 - Leptos Build Configuration and WASM Compatibility
+
+**Prompts:**
+1. "$ DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev cargo sqlx prepare - error: no such command: `sqlx`"
+2. "cargo leptos watch is not working, can you debug it"
+3. "When running leptos build how do I ensure I am on the nightly toolchain?"
+4. "Does this project need to run on nightly. Check back through a JOURNAL to see."
+5. "Can you add that to the README" (regarding wasm32-unknown-unknown target)
+6. "Can you stop your watch now"
+
+**Claude's Response:**
+- **Fixed sqlx-cli Installation**:
+  - Added `cargo install sqlx-cli --no-default-features --features postgres` to prerequisites
+  - Updated README.md, CLAUDE.md, and Database Management sections with installation instructions
+
+- **Debugged and Fixed cargo leptos watch**:
+  - **Issue 1 - ring crate WASM incompatibility**: `ring` v0.17.14 doesn't support WebAssembly compilation
+    - Root cause: `vostuff-core` dependencies (jsonwebtoken, sqlx/rustls) pulled in `ring` which failed to compile for wasm32
+    - Solution: Made server-only dependencies optional with feature flags
+
+  - **Issue 2 - uuid WASM randomness**: `uuid` crate needed randomness source for WASM
+    - Added `"js"` feature to uuid in workspace Cargo.toml for JavaScript-based randomness
+    - Added `"wasmbind"` feature to chrono for WASM compatibility
+
+  - **Issue 3 - utoipa compile errors**: OpenAPI schema derives don't exist in WASM context
+    - Used `#[cfg_attr(feature = "server", derive(ToSchema))]` for conditional derives
+    - Made all `utoipa` imports and derives conditional on server feature
+
+- **Implemented Conditional Compilation Architecture**:
+  - Modified `crates/vostuff-core/Cargo.toml`:
+    - Made `sqlx`, `argon2`, `jsonwebtoken`, `utoipa` optional dependencies
+    - Created `"server"` feature that enables all server-only dependencies
+  - Updated `crates/vostuff-core/src/lib.rs`:
+    - Made `auth` module conditional with `#[cfg(feature = "server")]`
+  - Updated `crates/vostuff-core/src/models.rs`:
+    - Added conditional import: `#[cfg(feature = "server")] use utoipa::ToSchema;`
+    - Converted all derives using Python script to separate server-only derives
+    - Pattern: `#[derive(Debug, Serialize, Deserialize)]` + `#[cfg_attr(feature = "server", derive(ToSchema, sqlx::FromRow))]`
+    - Fixed `utoipa::IntoParams` to use conditional derive
+  - Updated `crates/vostuff-api/Cargo.toml`:
+    - Enabled server feature: `vostuff-core = { path = "../vostuff-core", features = ["server"] }`
+  - Updated `crates/vostuff-web/Cargo.toml`:
+    - Added `"vostuff-core/server"` to ssr feature list
+    - Server features only enabled for SSR builds, not WASM/hydrate builds
+
+- **Fixed Leptos Configuration**:
+  - Moved Leptos config from `Leptos.toml` to workspace `Cargo.toml` under `[[workspace.metadata.leptos]]`
+  - Added required `name = "vostuff-web"` field
+  - Renamed binary from `web-server` to `vostuff-web` to match cargo-leptos expectations
+  - Final working configuration enables proper SSR + WASM compilation
+
+- **Clarified Rust Toolchain Requirements**:
+  - Confirmed project uses stable Rust (1.86.0+, edition 2024), not nightly
+  - Removed incorrectly created `rust-toolchain.toml` file
+  - Verified no mention of nightly in entire JOURNAL history
+
+- **Updated Documentation**:
+  - Added wasm32-unknown-unknown target to README Prerequisites and Web UI sections
+  - Added to CLAUDE.md Web UI prerequisites
+  - Documented sqlx-cli installation across all relevant sections
+
+- **Build Success**:
+  - `cargo leptos watch` now compiles successfully for both WASM (hydrate) and SSR targets
+  - Web server starts on http://127.0.0.1:3001 with hot reload
+  - Frontend (WASM) compiles without pulling in server-only dependencies
+  - Backend (SSR) has access to full server features (auth, database, etc.)
+
+**Technical Impact**: Established proper separation between client-side (WASM) and server-side (SSR) code through Rust's feature system. This architecture allows shared models/types to exist in vostuff-core while keeping incompatible dependencies (cryptography, database drivers) server-only. The conditional compilation pattern using `#[cfg_attr]` enables the same structs to have OpenAPI schemas on the server while remaining plain Rust types on the client. This is essential for Leptos SSR applications where code needs to compile for both native and WASM targets.
+
+## 2025-12-21 - SQLx Offline Mode and Development Docker Compose
+
+**Prompts:**
+1. "Create a DB only docker compose file with a different name: docker-compose-dev.yml."
+2. "How do you run the schema_manager from the command line?"
+3. "sqlx causing the builds to fail as the DB has been initialised. How do you disable sqlx query validation to build the schema tools? Example error: [error about relation 'organizations' does not exist]"
+4. "But the migrate step will fail without disabiling sqlx validation. Please rewrite the instructions to include this."
+5. "Please update the instructions in the README to capture these changes."
+
+**Claude's Response:**
+- Created `docker-compose-dev.yml` with database-only configuration for local development
+  - Uses separate container name (`vostuff-postgres-dev`) to avoid conflicts with full stack
+  - Uses separate volume (`postgres_data_dev`) to keep dev and full stack data isolated
+  - Removed network configuration (not needed for single service)
+- Explained schema-manager command-line usage with all available subcommands (migrate, reset, create)
+- Identified the sqlx compile-time validation issue: queries are validated against the database at build time, but tables don't exist on initial setup
+- Provided solution: use `SQLX_OFFLINE=true` environment variable to disable compile-time validation
+- Updated README.md with comprehensive sqlx workflow:
+  - Added initial setup section with `SQLX_OFFLINE=true` for first migration
+  - Documented `cargo sqlx prepare` for generating offline metadata
+  - Explained why SQLX_OFFLINE is needed (compile-time query validation)
+  - Added optional `.cargo/config.toml` configuration for automatic offline mode
+  - Updated database management commands to include proper DATABASE_URL and SQLX_OFFLINE flags
+  - Updated project structure to list both docker-compose files with descriptions
+- Updated CLAUDE.md with matching sqlx workflow and docker-compose-dev.yml commands
+- Documentation now correctly handles the chicken-and-egg problem of building schema tools when database schema doesn't exist
+
 ## 2025-01-25 - Initial Setup and Requirements Review
 
 **Prompt:** User ran `/init` command to analyze codebase and create CLAUDE.md, then asked about requirements tracking approaches, followed by requests to review requirements directory for open questions in data, organization and API layers. User made several updates to functional.md requirements during our discussion. Finally asked about ensuring JOURNAL.md gets updated going forward.

@@ -42,7 +42,7 @@ async fn main() -> Result<()> {
             let db_url = database_url
                 .or_else(|| env::var("DATABASE_URL").ok())
                 .unwrap_or(default_db_url);
-            
+
             println!("Running migrations on: {}", db_url);
             let schema_manager = SchemaManager::new(&db_url).await?;
             schema_manager.run_migrations().await?;
@@ -53,10 +53,10 @@ async fn main() -> Result<()> {
             let db_url = database_url
                 .or_else(|| env::var("DATABASE_URL").ok())
                 .unwrap_or(default_db_url);
-            
+
             println!("Resetting database: {}", db_url);
             println!("WARNING: This will delete all data!");
-            
+
             let schema_manager = SchemaManager::new(&db_url).await?;
             schema_manager.reset_database().await?;
             println!("Database reset completed successfully!");
@@ -66,7 +66,7 @@ async fn main() -> Result<()> {
             let db_url = database_url
                 .or_else(|| env::var("DATABASE_URL").ok())
                 .unwrap_or(default_db_url);
-            
+
             println!("Creating database if needed: {}", db_url);
             let schema_manager = SchemaManager::new(&db_url).await?;
             println!("Database ready!");
@@ -76,3 +76,4 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
+

@@ -18,16 +18,25 @@ of.
 - `cargo build --release` - Build optimized release version
 
 ### Database
-- `docker-compose up -d` - Start PostgreSQL database
-- `docker-compose down` - Stop PostgreSQL database
-- `cargo run --bin schema-manager migrate` - Run database migrations
-- `cargo run --bin schema-manager reset` - Reset database (drops all data)
+- **Prerequisites**: `cargo install sqlx-cli --no-default-features --features postgres` (one-time installation)
+- `docker-compose -f docker-compose-dev.yml up -d` - Start PostgreSQL database (local dev)
+- `docker-compose -f docker-compose-dev.yml down` - Stop PostgreSQL database
+- Initial setup (empty database):
+  - `SQLX_OFFLINE=true DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev cargo run --bin schema-manager migrate`
+  - `cd crates/vostuff-api && DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev cargo sqlx prepare && cd ../..`
+- After initial setup:
+  - `DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev cargo run --bin schema-manager migrate` - Run database migrations
+  - `SQLX_OFFLINE=true DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev cargo run --bin schema-manager reset` - Reset database (drops all data)
+- **Note**: Use `SQLX_OFFLINE=true` when database schema doesn't exist. SQLx validates queries at compile time.
 
 ### API Server
 - `cargo run --bin api-server` - Run the REST API server (port 8080)
 - Swagger UI available at http://localhost:8080/swagger-ui
 
 ### Web UI
+- **Prerequisites**:
+  - `rustup target add wasm32-unknown-unknown` (one-time installation)
+  - `cargo install cargo-leptos` (one-time installation)
 - `cargo leptos watch` - Run the web UI in development mode with hot reload (port 3001)
 - `cargo leptos build --release` - Build the web UI for production
 - `cargo leptos serve --release` - Run the production build

@@ -58,6 +58,7 @@ use vostuff_api::api::{
         // Authentication
         auth::login,
         auth::select_org,
+        auth::get_me,
     ),
     components(
         schemas(
@@ -160,6 +161,8 @@ async fn main() -> anyhow::Result<()> {
         // Authentication (public endpoints)
         .route("/auth/login", post(auth::login))
         .route("/auth/select-org", post(auth::select_org))
+        // Authentication (authenticated endpoints)
+        .route("/auth/me", get(auth::get_me))
         .with_state(state.clone())
         // Add auth middleware to extract tokens from headers
         .layer(middleware::from_fn_with_state(state, auth_middleware));

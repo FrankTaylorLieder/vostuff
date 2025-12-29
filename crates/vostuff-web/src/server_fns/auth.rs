@@ -161,11 +161,6 @@ pub async fn select_organization(
 pub async fn get_current_user() -> Result<Option<UserInfo>, ServerFnError<NoCustomError>> {
     use leptos_axum::extract;
     use axum::http::header::COOKIE;
-    use vostuff_core::auth::TokenManager;
-
-    // Get the JWT secret from environment
-    let jwt_secret = std::env::var("JWT_SECRET")
-        .map_err(|_| ServerFnError::<NoCustomError>::ServerError("JWT_SECRET not configured".to_string()))?;
 
     // Get cookies from request headers
     let headers = extract::<axum::http::HeaderMap>().await
@@ -180,7 +175,7 @@ pub async fn get_current_user() -> Result<Option<UserInfo>, ServerFnError<NoCust
                 .split(';')
                 .map(|c| c.trim())
                 .find(|c| c.starts_with("auth_token="))
-                .map(|c| c.trim_start_matches("auth_token="))
+                .map(|c| c.trim_start_matches("auth_token=").to_string())
         });
 
     // If no auth token, return None
@@ -189,70 +184,69 @@ pub async fn get_current_user() -> Result<Option<UserInfo>, ServerFnError<NoCust
         None => return Ok(None),
     };
 
-    // Validate and decode the JWT
-    let token_manager = TokenManager::new(&jwt_secret);
-    let claims = token_manager.validate_token(token)
-        .map_err(|e| ServerFnError::<NoCustomError>::ServerError(format!("Invalid token: {}", e)))?;
-
     // Get API base URL from environment
     let api_base_url = std::env::var("API_BASE_URL")
         .unwrap_or_else(|_| "http://localhost:8080".to_string());
 
-    // Fetch user details from the API (to get the latest name)
+    // Call the /api/auth/me endpoint to get user info
     let client = reqwest::Client::new();
     let response = client
-        .get(format!("{}/api/users/{}", api_base_url, claims.sub))
+        .get(format!("{}/api/auth/me", api_base_url))
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .await
         .map_err(|e| ServerFnError::<NoCustomError>::ServerError(format!("API request failed: {}", e)))?;
 
-    if !response.status().is_success() {
-        return Err(ServerFnError::<NoCustomError>::ServerError("Failed to fetch user details".to_string()));
+    // If unauthorized (401), return None (user not logged in or token invalid)
+    if response.status() == 401 {
+        return Ok(None);
     }
 
-    // Parse the user response
+    // If other error, return error
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(ServerFnError::<NoCustomError>::ServerError(
+            format!("Failed to get user info: {} - {}", status, body)
+        ));
+    }
+
+    // Parse the response - it should match our UserInfo structure
+    // but we need to map the API's Organization type to our OrganizationInfo
     #[derive(serde::Deserialize)]
-    struct UserResponse {
+    struct ApiUserInfo {
         id: Uuid,
         name: String,
         identity: String,
-    }
-
-    let user_resp: UserResponse = response.json().await
-        .map_err(|e| ServerFnError::<NoCustomError>::ServerError(format!("Failed to parse user response: {}", e)))?;
-
-    // Get organization name from the API
-    let org_response = client
-        .get(format!("{}/api/organizations/{}", api_base_url, claims.organization_id))
-        .header("Authorization", format!("Bearer {}", token))
-        .send()
-        .await
-        .map_err(|e| ServerFnError::<NoCustomError>::ServerError(format!("API request failed: {}", e)))?;
-
-    if !org_response.status().is_success() {
-        return Err(ServerFnError::<NoCustomError>::ServerError("Failed to fetch organization details".to_string()));
+        organization: ApiOrganization,
+        roles: Vec<String>,
     }
 
     #[derive(serde::Deserialize)]
-    struct OrgResponse {
+    struct ApiOrganization {
         id: Uuid,
         name: String,
+        #[allow(dead_code)]
+        description: Option<String>,
+        #[allow(dead_code)]
+        created_at: chrono::DateTime<chrono::Utc>,
+        #[allow(dead_code)]
+        updated_at: chrono::DateTime<chrono::Utc>,
     }
 
-    let org_resp: OrgResponse = org_response.json().await
-        .map_err(|e| ServerFnError::<NoCustomError>::ServerError(format!("Failed to parse org response: {}", e)))?;
+    let api_user_info: ApiUserInfo = response.json().await
+        .map_err(|e| ServerFnError::<NoCustomError>::ServerError(format!("Failed to parse response: {}", e)))?;
 
-    // Construct UserInfo
+    // Convert to our UserInfo type
     let user_info = UserInfo {
-        id: user_resp.id,
-        name: user_resp.name,
-        identity: user_resp.identity,
+        id: api_user_info.id,
+        name: api_user_info.name,
+        identity: api_user_info.identity,
         organization: OrganizationInfo {
-            id: org_resp.id,
-            name: org_resp.name,
+            id: api_user_info.organization.id,
+            name: api_user_info.organization.name,
         },
-        roles: claims.roles,
+        roles: api_user_info.roles,
     };
 
     Ok(Some(user_info))

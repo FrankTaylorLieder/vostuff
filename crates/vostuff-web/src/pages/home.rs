@@ -6,35 +6,8 @@ use crate::server_fns::auth::get_current_user;
 
 #[component]
 pub fn HomePage() -> impl IntoView {
-    let navigate = use_navigate();
-
     // Fetch current user on component mount
-    let user_resource = create_resource(
-        || (),
-        |_| async move {
-            get_current_user().await
-        },
-    );
-
-    // Effect to redirect if not authenticated
-    let nav = navigate.clone();
-    create_effect(move |_| {
-        if let Some(result) = user_resource.get() {
-            match result {
-                Ok(None) => {
-                    // Not authenticated - redirect to login
-                    nav("/login", NavigateOptions::default());
-                }
-                Err(_) => {
-                    // Error checking auth - redirect to login
-                    nav("/login", NavigateOptions::default());
-                }
-                Ok(Some(_)) => {
-                    // Authenticated - stay on page
-                }
-            }
-        }
-    });
+    let user_resource = create_resource(|| (), |_| async move { get_current_user().await });
 
     view! {
         <div>
@@ -58,8 +31,9 @@ pub fn HomePage() -> impl IntoView {
                                 }
                                     .into_view()
                             }
-                            _ => {
-                                view! { <div class="container">"Redirecting to login..."</div> }
+                            Ok(None) | Err(_) => {
+                                // Not authenticated or error - redirect to login
+                                view! { <Redirect path="/login"/> }
                                     .into_view()
                             }
                         })

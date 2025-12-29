@@ -44,7 +44,9 @@ A three-tier Rust application for tracking collections of stuff - vinyl records,
 - Rust 1.86.0 or later (edition 2024)
 - Docker and Docker Compose
 - PostgreSQL client tools (optional, for manual database access)
+- WebAssembly target (for web UI): `rustup target add wasm32-unknown-unknown`
 - cargo-leptos (for running the web UI): `cargo install cargo-leptos`
+- sqlx-cli (for database tooling): `cargo install sqlx-cli --no-default-features --features postgres`
 
 ## Getting Started
 
@@ -80,8 +82,10 @@ API_BASE_URL=http://localhost:8080
 
 ### 3. Start the Database
 
+For local development, use the database-only Docker Compose file:
+
 ```bash
-docker-compose up -d
+docker-compose -f docker-compose-dev.yml up -d
 ```
 
 This starts a PostgreSQL 16 container with:
@@ -90,13 +94,34 @@ This starts a PostgreSQL 16 container with:
 - Password: `vostuff_dev_password`
 - Port: `5432`
 
+**Note**: `docker-compose-dev.yml` starts only the database, allowing you to run the API and web services locally with `cargo`. For running the full stack in Docker, use `docker-compose.yml` instead (see Docker Deployment section).
+
 ### 4. Run Database Migrations
 
+**Initial setup** (when database is empty):
+
 ```bash
-cargo run --bin schema-manager migrate
+# Install sqlx-cli if not already installed
+cargo install sqlx-cli --no-default-features --features postgres
+
+# Build and run migrations with sqlx validation disabled
+SQLX_OFFLINE=true DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev cargo run --bin schema-manager migrate
+
+# Generate sqlx metadata for future builds
+cd crates/vostuff-api
+DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev cargo sqlx prepare
+cd ../..
+```
+
+**After initial setup**:
+
+```bash
+DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev cargo run --bin schema-manager migrate
 ```
 
 This creates all tables, indexes, triggers, and the initial SYSTEM organization.
+
+**Why SQLX_OFFLINE?** SQLx validates SQL queries at compile time against the database. On initial setup, the tables don't exist yet, causing compilation to fail. Setting `SQLX_OFFLINE=true` disables this validation. After running migrations once, you can generate metadata with `cargo sqlx prepare` to enable offline validation without database access.
 
 ### 5. Load Sample Data (Optional)
 
@@ -252,24 +277,46 @@ cargo build --release
 ### Database Management
 
 ```bash
-# Start PostgreSQL
-docker-compose up -d
+# Install sqlx-cli (one-time, if not already installed)
+cargo install sqlx-cli --no-default-features --features postgres
+
+# Start PostgreSQL (database only, for local development)
+docker-compose -f docker-compose-dev.yml up -d
 
 # Stop PostgreSQL
-docker-compose down
+docker-compose -f docker-compose-dev.yml down
 
-# Run migrations
-cargo run --bin schema-manager migrate
+# Run migrations (initial setup - database empty)
+SQLX_OFFLINE=true DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev cargo run --bin schema-manager migrate
+
+# Generate sqlx metadata (run after initial migration)
+cd crates/vostuff-api
+DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev cargo sqlx prepare
+cd ../..
+
+# Run migrations (after initial setup)
+DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev cargo run --bin schema-manager migrate
 
 # Reset database (WARNING: deletes all data)
-cargo run --bin schema-manager reset
+SQLX_OFFLINE=true DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev cargo run --bin schema-manager reset
 
 # Create database only (no migrations)
-cargo run --bin schema-manager create
+SQLX_OFFLINE=true DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev cargo run --bin schema-manager create
 
 # Load sample data for testing
-cargo run --bin load-sample-data
+DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev cargo run --bin load-sample-data
 ```
+
+**Note on SQLX_OFFLINE**: Use `SQLX_OFFLINE=true` when the database schema doesn't exist or has been reset. After running migrations once, you can omit it or set up automatic offline mode (see next section).
+
+**Automatic Offline Mode** (optional): Create `.cargo/config.toml` in the project root:
+
+```toml
+[env]
+SQLX_OFFLINE = "true"
+```
+
+This makes offline mode the default for all builds, eliminating the need to set the environment variable each time.
 
 ### API Server
 
@@ -286,7 +333,8 @@ cargo run --bin api-server
 The web UI is built with Leptos and uses cargo-leptos for development and building.
 
 ```bash
-# Install cargo-leptos (if not already installed)
+# Install prerequisites (if not already installed)
+rustup target add wasm32-unknown-unknown
 cargo install cargo-leptos
 
 # Run the web UI in development mode (with hot reload)
@@ -362,7 +410,8 @@ vostuff/
 │   └── init-db.sh          # Database initialization
 ├── requirements/
 │   └── functional.md       # Functional requirements
-├── docker-compose.yml      # PostgreSQL container config
+├── docker-compose.yml      # Full stack (DB + API + Web + migrations)
+├── docker-compose-dev.yml  # Database only for local development
 ├── Leptos.toml             # cargo-leptos configuration
 ├── CLAUDE.md              # Development guidelines
 ├── JOURNAL.md             # Development journal

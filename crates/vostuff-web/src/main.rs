@@ -11,7 +11,10 @@ use tower_http::services::ServeDir;
 async fn main() {
     // Initialize tracing for logging
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"))
+        )
         .init();
 
     // Get API base URL from environment

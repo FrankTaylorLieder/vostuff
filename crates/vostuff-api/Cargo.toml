@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 # Internal dependencies
-vostuff-core = { path = "../vostuff-core" }
+vostuff-core = { path = "../vostuff-core", features = ["server"] }
 
 # Database
 sqlx = { workspace = true }

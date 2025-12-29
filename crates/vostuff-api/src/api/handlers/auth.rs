@@ -1,5 +1,5 @@
 use axum::{
-    extract::State,
+    extract::{Request, State},
     http::StatusCode,
     Json,
 };
@@ -13,7 +13,7 @@ use crate::{
         },
         state::AppState,
     },
-    auth::{PasswordHasher, TokenManager},
+    auth::{AuthContext, PasswordHasher, TokenManager},
 };
 
 /// User login endpoint with optional organization selection
@@ -291,6 +291,103 @@ pub async fn select_org(
     };
 
     Ok(Json(response))
+}
+
+/// Get current authenticated user information
+#[utoipa::path(
+    get,
+    path = "/api/auth/me",
+    responses(
+        (status = 200, description = "User information retrieved", body = UserInfo),
+        (status = 401, description = "Not authenticated", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "auth",
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn get_me(
+    State(state): State<AppState>,
+    request: Request,
+) -> Result<Json<UserInfo>, (StatusCode, Json<ErrorResponse>)> {
+    // Extract auth context from request extensions (set by auth middleware)
+    let auth_context = request
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .ok_or_else(|| (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "unauthorized".to_string(),
+                message: "Authentication required".to_string(),
+            }),
+        ))?;
+
+    // Check if authenticated
+    if !auth_context.is_authenticated() {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "unauthorized".to_string(),
+                message: "Authentication required".to_string(),
+            }),
+        ));
+    }
+
+    // Get user info from database
+    let user_row = sqlx::query_as::<_, (String, String)>(
+        "SELECT name, identity FROM users WHERE id = $1"
+    )
+    .bind(auth_context.user_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(internal_error)?
+    .ok_or_else(|| (
+        StatusCode::NOT_FOUND,
+        Json(ErrorResponse {
+            error: "user_not_found".to_string(),
+            message: "User not found".to_string(),
+        }),
+    ))?;
+
+    let (user_name, user_identity) = user_row;
+
+    // Get organization info
+    let org_row = sqlx::query_as::<_, (String, Option<String>)>(
+        "SELECT name, description FROM organizations WHERE id = $1"
+    )
+    .bind(auth_context.organization_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(internal_error)?
+    .ok_or_else(|| (
+        StatusCode::NOT_FOUND,
+        Json(ErrorResponse {
+            error: "organization_not_found".to_string(),
+            message: "Organization not found".to_string(),
+        }),
+    ))?;
+
+    let (org_name, org_desc) = org_row;
+
+    let organization = Organization {
+        id: auth_context.organization_id,
+        name: org_name,
+        description: org_desc,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+
+    let user_info = UserInfo {
+        id: auth_context.user_id,
+        name: user_name,
+        identity: user_identity,
+        organization,
+        roles: auth_context.roles.clone(),
+    };
+
+    Ok(Json(user_info))
 }
 
 fn internal_error<E: std::fmt::Display>(err: E) -> (StatusCode, Json<ErrorResponse>) {

@@ -1,7 +1,6 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "server")]
-#[cfg(feature = "server")]
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -20,7 +19,7 @@ pub enum ItemType {
 }
 
 // Item states
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, , Clone)]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ItemState {
@@ -31,7 +30,7 @@ pub enum ItemState {
 }
 
 // Vinyl specific enums
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, , Clone)]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum VinylSize {
@@ -42,7 +41,7 @@ pub enum VinylSize {
     Other,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, , Clone)]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum VinylSpeed {
@@ -53,7 +52,7 @@ pub enum VinylSpeed {
     Other,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, , Clone)]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum VinylChannels {
@@ -63,7 +62,7 @@ pub enum VinylChannels {
     Other,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, , Clone)]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Grading {
@@ -76,7 +75,7 @@ pub enum Grading {
 }
 
 // Item response
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct Item {
     pub id: Uuid,
@@ -94,7 +93,7 @@ pub struct Item {
 }
 
 // Create item request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct CreateItemRequest {
     pub item_type: ItemType,
@@ -106,7 +105,7 @@ pub struct CreateItemRequest {
 }
 
 // Update item request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct UpdateItemRequest {
     pub name: Option<String>,
@@ -118,7 +117,7 @@ pub struct UpdateItemRequest {
 }
 
 // Vinyl details
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct VinylDetails {
     pub item_id: Uuid,
@@ -131,8 +130,8 @@ pub struct VinylDetails {
 }
 
 // Location
-#[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(ToSchema, sqlx::FromRow))]
+#[derive(Debug, Serialize, Deserialize, , )]
+#[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct Location {
     pub id: Uuid,
     pub organization_id: Uuid,
@@ -141,15 +140,15 @@ pub struct Location {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct CreateLocationRequest {
     pub name: String,
 }
 
 // Collection
-#[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(ToSchema, sqlx::FromRow))]
+#[derive(Debug, Serialize, Deserialize, , )]
+#[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct Collection {
     pub id: Uuid,
     pub organization_id: Uuid,
@@ -160,7 +159,7 @@ pub struct Collection {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct CreateCollectionRequest {
     pub name: String,
@@ -169,23 +168,23 @@ pub struct CreateCollectionRequest {
 }
 
 // Tag
-#[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(ToSchema, sqlx::FromRow))]
+#[derive(Debug, Serialize, Deserialize, , )]
+#[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct Tag {
     pub organization_id: Uuid,
     pub name: String,
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct CreateTagRequest {
     pub name: String,
 }
 
 // Organization
-#[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(ToSchema, sqlx::FromRow))]
+#[derive(Debug, Serialize, Deserialize, , )]
+#[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct Organization {
     pub id: Uuid,
     pub name: String,
@@ -194,14 +193,14 @@ pub struct Organization {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct CreateOrganizationRequest {
     pub name: String,
     pub description: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct UpdateOrganizationRequest {
     pub name: Option<String>,
@@ -209,7 +208,7 @@ pub struct UpdateOrganizationRequest {
 }
 
 // User roles
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, , Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 #[serde(rename_all = "UPPERCASE")]
 pub enum UserRole {
@@ -235,8 +234,8 @@ impl UserRole {
 }
 
 // User
-#[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(ToSchema, sqlx::FromRow))]
+#[derive(Debug, Serialize, Deserialize, , )]
+#[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct User {
     pub id: Uuid,
     pub name: String,
@@ -247,7 +246,7 @@ pub struct User {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct CreateUserRequest {
     pub name: String,
@@ -256,7 +255,7 @@ pub struct CreateUserRequest {
     pub password: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct UpdateUserRequest {
     pub name: Option<String>,
@@ -266,7 +265,7 @@ pub struct UpdateUserRequest {
 }
 
 // Authentication models
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct LoginRequest {
     pub identity: String,
@@ -275,7 +274,7 @@ pub struct LoginRequest {
     pub organization_id: Option<Uuid>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct LoginResponse {
     pub token: String,
@@ -283,14 +282,14 @@ pub struct LoginResponse {
     pub user: UserInfo,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct OrgSelectionResponse {
     pub organizations: Vec<OrganizationWithRoles>,
     pub follow_on_token: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct OrganizationWithRoles {
     pub id: Uuid,
@@ -299,14 +298,14 @@ pub struct OrganizationWithRoles {
     pub roles: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct SelectOrgRequest {
     pub follow_on_token: String,
     pub organization_id: Uuid,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct UserInfo {
     pub id: Uuid,
@@ -317,8 +316,8 @@ pub struct UserInfo {
 }
 
 // User organization membership
-#[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(ToSchema, sqlx::FromRow))]
+#[derive(Debug, Serialize, Deserialize, , )]
+#[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct UserOrganization {
     pub user_id: Uuid,
     pub organization_id: Uuid,
@@ -326,21 +325,21 @@ pub struct UserOrganization {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct AddUserToOrgRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub roles: Option<Vec<UserRole>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct UpdateUserOrgRolesRequest {
     pub roles: Vec<UserRole>,
 }
 
 // Error response
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct ErrorResponse {
     pub error: String,
@@ -348,9 +347,8 @@ pub struct ErrorResponse {
 }
 
 // Pagination
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, , utoipa::IntoParams)]
 #[cfg_attr(feature = "server", derive(ToSchema))]
-#[cfg_attr(feature = "server", derive(utoipa::IntoParams))]
 pub struct PaginationParams {
     #[serde(default = "default_page")]
     pub page: i64,
@@ -366,7 +364,7 @@ fn default_per_page() -> i64 {
     50
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, )]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct PaginatedResponse<T> {
     pub items: Vec<T>,

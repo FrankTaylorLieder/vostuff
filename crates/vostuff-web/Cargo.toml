@@ -7,7 +7,7 @@ edition = "2024"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# Internal dependencies
+# Internal dependencies (server features enabled conditionally via features)
 vostuff-core = { path = "../vostuff-core" }
 
 # Leptos SSR + Hydration
@@ -42,17 +42,24 @@ tracing-subscriber = { workspace = true }
 
 [features]
 default = ["ssr"]
-hydrate = ["leptos/hydrate"]
+hydrate = [
+    "leptos/hydrate",
+    "leptos_router/hydrate",
+    "leptos_meta/hydrate",
+]
 ssr = [
     "leptos/ssr",
+    "leptos_router/ssr",
+    "leptos_meta/ssr",
     "dep:leptos_axum",
     "dep:axum",
     "dep:tower",
     "dep:tower-http",
     "dep:tokio",
+    "vostuff-core/server",  # Enable server features when building for SSR
 ]
 
 [[bin]]
-name = "web-server"
+name = "vostuff-web"
 path = "src/main.rs"
 required-features = ["ssr"]

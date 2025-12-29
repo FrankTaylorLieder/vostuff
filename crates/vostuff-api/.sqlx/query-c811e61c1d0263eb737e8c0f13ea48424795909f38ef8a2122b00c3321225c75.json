@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO item_disposed_details (item_id, date_disposed) VALUES ($1, CURRENT_DATE - INTERVAL '60 days')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c811e61c1d0263eb737e8c0f13ea48424795909f38ef8a2122b00c3321225c75"
+}

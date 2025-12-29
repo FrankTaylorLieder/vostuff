@@ -14,8 +14,8 @@ sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid"
 tokio = { version = "1.0", features = ["full"] }
 
 # Common types
-uuid = { version = "1.0", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde", "js"] }
+chrono = { version = "0.4", features = ["serde", "wasmbind"] }
 
 # Error handling
 anyhow = "1.0"
@@ -59,3 +59,66 @@ reqwest = { version = "0.12", features = ["json", "cookies"] }
 wasm-bindgen = "0.2"
 console_error_panic_hook = "0.1"
 web-sys = "0.3"
+
+# Leptos configuration for cargo-leptos
+[[workspace.metadata.leptos]]
+# The name of this Leptos project
+name = "vostuff-web"
+
+# The name used by cargo-leptos for the binary package
+bin-package = "vostuff-web"
+
+# The name used by cargo-leptos for the library package
+lib-package = "vostuff-web"
+
+# The site root folder is where cargo-leptos generate all output
+site-root = "target/site"
+
+# The site-root relative folder where all compiled output (JS, WASM and CSS) is written
+site-pkg-dir = "pkg"
+
+# The source CSS file
+style-file = "crates/vostuff-web/style/main.css"
+
+# Assets source dir. All files found here will be copied and synchronized to site-root
+assets-dir = "crates/vostuff-web/assets"
+
+# The IP and port where the server serves the content
+site-addr = "127.0.0.1:3001"
+
+# The port to use for automatic reload monitoring
+reload-port = 3002
+
+# Command to use when running end2end tests
+end2end-cmd = "npx playwright test"
+end2end-dir = "end2end"
+
+# The browserlist query used for optimizing the CSS
+browserquery = "defaults"
+
+# Set by cargo-leptos watch when building with that tool
+watch = false
+
+# The environment Leptos will run in, usually `DEV` or `PROD`
+env = "DEV"
+
+# The features to use when compiling the bin target
+bin-features = ["ssr"]
+
+# If the --no-default-features flag should be used when compiling the bin target
+bin-default-features = false
+
+# The features to use when compiling the lib target
+lib-features = ["hydrate"]
+
+# If the --no-default-features flag should be used when compiling the lib target
+lib-default-features = false
+
+# The profile to use for the lib target when compiling for release
+lib-profile-release = "wasm-release"
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = 'z'
+lto = true
+codegen-units = 1
