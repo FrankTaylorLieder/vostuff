@@ -364,18 +364,34 @@ The web UI provides:
 
 ### Testing and Quality
 
+The project includes a comprehensive test suite with unit tests and integration tests.
+
+#### API Integration Tests
+
+The API has integration tests covering:
+- **Authentication**: Login, multi-org selection, `/api/auth/me` endpoint
+- **Multi-tenancy isolation**: Ensuring users cannot access other organizations' data
+- **Items CRUD**: Create, read, update, delete operations
+- **Authorization**: Role-based access control
+
 ```bash
 # Run all tests
 cargo test
 
-# Run integration tests only
-cargo test --test api_tests
+# Run all API integration tests (recommended: use --test-threads=1 for database isolation)
+cargo test --package vostuff-api --tests -- --test-threads=1
 
-# Run integration tests with proper isolation (one at a time)
-cargo test --test api_tests -- --test-threads=1
+# Run specific test suites
+cargo test --package vostuff-api --test auth_tests -- --test-threads=1
+cargo test --package vostuff-api --test multi_tenancy_tests -- --test-threads=1
+cargo test --package vostuff-api --test items_tests -- --test-threads=1
 
 # Run specific test
 cargo test <test_name>
+
+# Run unit tests only (fast, no database required)
+cargo test --package vostuff-core
+cargo test --package vostuff-api --lib
 
 # Check code without building
 cargo check
@@ -386,6 +402,8 @@ cargo clippy
 # Format code
 cargo fmt
 ```
+
+**Note**: Integration tests require a running PostgreSQL database. They use the `DATABASE_URL` from your environment or `.env` file. Each test suite cleans the database before running to ensure test isolation.
 
 ## Project Structure
 

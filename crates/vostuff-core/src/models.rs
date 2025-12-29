@@ -266,7 +266,7 @@ pub struct UpdateUserRequest {
 }
 
 // Authentication models
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct LoginRequest {
     pub identity: String,
@@ -275,7 +275,7 @@ pub struct LoginRequest {
     pub organization_id: Option<Uuid>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct LoginResponse {
     pub token: String,
@@ -283,14 +283,14 @@ pub struct LoginResponse {
     pub user: UserInfo,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct OrgSelectionResponse {
     pub organizations: Vec<OrganizationWithRoles>,
     pub follow_on_token: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct OrganizationWithRoles {
     pub id: Uuid,
@@ -299,14 +299,14 @@ pub struct OrganizationWithRoles {
     pub roles: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct SelectOrgRequest {
     pub follow_on_token: String,
     pub organization_id: Uuid,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct UserInfo {
     pub id: Uuid,
