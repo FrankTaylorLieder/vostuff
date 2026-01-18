@@ -11,18 +11,23 @@ async fn test_login_single_org() {
 
     // Create org and user
     let org_id = ctx.create_organization("TestCo", "Test Company").await;
-    let user_id = ctx.create_user("Alice", "alice@test.com", "password123").await;
-    ctx.add_user_to_org(user_id, org_id, vec!["USER".to_string()]).await;
+    let user_id = ctx
+        .create_user("Alice", "alice@test.com", "password123")
+        .await;
+    ctx.add_user_to_org(user_id, org_id, vec!["USER".to_string()])
+        .await;
 
     // Login without specifying org (should auto-select)
-    let response = ctx.post(
-        "/api/auth/login",
-        &json!({
-            "identity": "alice@test.com",
-            "password": "password123"
-        }),
-        None
-    ).await;
+    let response = ctx
+        .post(
+            "/api/auth/login",
+            &json!({
+                "identity": "alice@test.com",
+                "password": "password123"
+            }),
+            None,
+        )
+        .await;
 
     response.assert_status(StatusCode::OK);
 
@@ -42,18 +47,22 @@ async fn test_login_multi_org_requires_selection() {
 
     // Create user in both orgs
     let user_id = ctx.create_user("Bob", "bob@test.com", "password123").await;
-    ctx.add_user_to_org(user_id, org1_id, vec!["USER".to_string()]).await;
-    ctx.add_user_to_org(user_id, org2_id, vec!["ADMIN".to_string()]).await;
+    ctx.add_user_to_org(user_id, org1_id, vec!["USER".to_string()])
+        .await;
+    ctx.add_user_to_org(user_id, org2_id, vec!["ADMIN".to_string()])
+        .await;
 
     // Login without specifying org
-    let response = ctx.post(
-        "/api/auth/login",
-        &json!({
-            "identity": "bob@test.com",
-            "password": "password123"
-        }),
-        None
-    ).await;
+    let response = ctx
+        .post(
+            "/api/auth/login",
+            &json!({
+                "identity": "bob@test.com",
+                "password": "password123"
+            }),
+            None,
+        )
+        .await;
 
     response.assert_status(StatusCode::OK);
 
@@ -73,20 +82,30 @@ async fn test_login_with_org_selection() {
     let org2_id = ctx.create_organization("Org2", "Second Org").await;
 
     // Create user in both orgs with different roles
-    let user_id = ctx.create_user("Charlie", "charlie@test.com", "password123").await;
-    ctx.add_user_to_org(user_id, org1_id, vec!["USER".to_string()]).await;
-    ctx.add_user_to_org(user_id, org2_id, vec!["USER".to_string(), "ADMIN".to_string()]).await;
+    let user_id = ctx
+        .create_user("Charlie", "charlie@test.com", "password123")
+        .await;
+    ctx.add_user_to_org(user_id, org1_id, vec!["USER".to_string()])
+        .await;
+    ctx.add_user_to_org(
+        user_id,
+        org2_id,
+        vec!["USER".to_string(), "ADMIN".to_string()],
+    )
+    .await;
 
     // Login with explicit org selection (org2)
-    let response = ctx.post(
-        "/api/auth/login",
-        &json!({
-            "identity": "charlie@test.com",
-            "password": "password123",
-            "organization_id": org2_id
-        }),
-        None
-    ).await;
+    let response = ctx
+        .post(
+            "/api/auth/login",
+            &json!({
+                "identity": "charlie@test.com",
+                "password": "password123",
+                "organization_id": org2_id
+            }),
+            None,
+        )
+        .await;
 
     response.assert_status(StatusCode::OK);
 
@@ -100,18 +119,23 @@ async fn test_login_invalid_credentials() {
     let ctx = TestContext::new().await;
 
     let org_id = ctx.create_organization("TestCo", "Test Company").await;
-    let user_id = ctx.create_user("Alice", "alice@test.com", "password123").await;
-    ctx.add_user_to_org(user_id, org_id, vec!["USER".to_string()]).await;
+    let user_id = ctx
+        .create_user("Alice", "alice@test.com", "password123")
+        .await;
+    ctx.add_user_to_org(user_id, org_id, vec!["USER".to_string()])
+        .await;
 
     // Wrong password
-    let response = ctx.post(
-        "/api/auth/login",
-        &json!({
-            "identity": "alice@test.com",
-            "password": "wrongpassword"
-        }),
-        None
-    ).await;
+    let response = ctx
+        .post(
+            "/api/auth/login",
+            &json!({
+                "identity": "alice@test.com",
+                "password": "wrongpassword"
+            }),
+            None,
+        )
+        .await;
 
     response.assert_status(StatusCode::UNAUTHORIZED);
 }
@@ -125,32 +149,40 @@ async fn test_select_org_after_multi_org_login() {
     let org2_id = ctx.create_organization("Org2", "Second Org").await;
 
     // Create user in both orgs
-    let user_id = ctx.create_user("Dave", "dave@test.com", "password123").await;
-    ctx.add_user_to_org(user_id, org1_id, vec!["USER".to_string()]).await;
-    ctx.add_user_to_org(user_id, org2_id, vec!["ADMIN".to_string()]).await;
+    let user_id = ctx
+        .create_user("Dave", "dave@test.com", "password123")
+        .await;
+    ctx.add_user_to_org(user_id, org1_id, vec!["USER".to_string()])
+        .await;
+    ctx.add_user_to_org(user_id, org2_id, vec!["ADMIN".to_string()])
+        .await;
 
     // First login to get follow-on token
-    let login_response = ctx.post(
-        "/api/auth/login",
-        &json!({
-            "identity": "dave@test.com",
-            "password": "password123"
-        }),
-        None
-    ).await;
+    let login_response = ctx
+        .post(
+            "/api/auth/login",
+            &json!({
+                "identity": "dave@test.com",
+                "password": "password123"
+            }),
+            None,
+        )
+        .await;
 
     login_response.assert_status(StatusCode::OK);
     let org_selection: OrgSelectionResponse = login_response.json();
 
     // Now select org2
-    let select_response = ctx.post(
-        "/api/auth/select-org",
-        &json!({
-            "follow_on_token": org_selection.follow_on_token,
-            "organization_id": org2_id
-        }),
-        None
-    ).await;
+    let select_response = ctx
+        .post(
+            "/api/auth/select-org",
+            &json!({
+                "follow_on_token": org_selection.follow_on_token,
+                "organization_id": org2_id
+            }),
+            None,
+        )
+        .await;
 
     select_response.assert_status(StatusCode::OK);
 
@@ -164,10 +196,10 @@ async fn test_auth_me_endpoint() {
     let fixture = TestFixture::new().await;
 
     // Call /api/auth/me with user1's token
-    let response = fixture.ctx.get(
-        "/api/auth/me",
-        Some(&fixture.user1_token)
-    ).await;
+    let response = fixture
+        .ctx
+        .get("/api/auth/me", Some(&fixture.user1_token))
+        .await;
 
     response.assert_success();
 
@@ -205,10 +237,10 @@ async fn test_auth_me_returns_correct_org() {
     let fixture = TestFixture::new().await;
 
     // Call /api/auth/me with user3's token (different org)
-    let response = fixture.ctx.get(
-        "/api/auth/me",
-        Some(&fixture.user3_token)
-    ).await;
+    let response = fixture
+        .ctx
+        .get("/api/auth/me", Some(&fixture.user3_token))
+        .await;
 
     response.assert_success();
 

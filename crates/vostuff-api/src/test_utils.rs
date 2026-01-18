@@ -1,7 +1,7 @@
+use crate::auth::PasswordHasher;
 use anyhow::Result;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
-use crate::auth::PasswordHasher;
 
 pub struct SampleDataLoader<'a> {
     pool: &'a PgPool,
@@ -28,12 +28,22 @@ impl<'a> SampleDataLoader<'a> {
 
         // Create users with passwords
         // Bob is a regular user, Alice is an admin
-        let bob_id = self.create_user("Bob", "bob@coke.com", Some("secret123")).await?;
-        let alice_id = self.create_user("Alice", "alice@pepsi.com", Some("secret123")).await?;
+        let bob_id = self
+            .create_user("Bob", "bob@coke.com", Some("secret123"))
+            .await?;
+        let alice_id = self
+            .create_user("Alice", "alice@pepsi.com", Some("secret123"))
+            .await?;
 
         // Associate users with orgs and assign roles
-        self.add_user_to_org(bob_id, coke_id, vec!["USER".to_string()]).await?;
-        self.add_user_to_org(alice_id, pepsi_id, vec!["USER".to_string(), "ADMIN".to_string()]).await?;
+        self.add_user_to_org(bob_id, coke_id, vec!["USER".to_string()])
+            .await?;
+        self.add_user_to_org(
+            alice_id,
+            pepsi_id,
+            vec!["USER".to_string(), "ADMIN".to_string()],
+        )
+        .await?;
 
         // Create locations for each org
         let coke_locations = self.create_locations(coke_id).await?;
@@ -49,11 +59,13 @@ impl<'a> SampleDataLoader<'a> {
 
         // Create items for Coke
         println!("Creating items for Coke organization...");
-        self.create_items_for_org(coke_id, &coke_locations, &coke_collections).await?;
+        self.create_items_for_org(coke_id, &coke_locations, &coke_collections)
+            .await?;
 
         // Create items for Pepsi
         println!("Creating items for Pepsi organization...");
-        self.create_items_for_org(pepsi_id, &pepsi_locations, &pepsi_collections).await?;
+        self.create_items_for_org(pepsi_id, &pepsi_locations, &pepsi_collections)
+            .await?;
 
         println!("✓ Sample data loaded successfully!");
 
@@ -77,14 +89,19 @@ impl<'a> SampleDataLoader<'a> {
         Ok(rec.id)
     }
 
-    async fn create_user(&self, name: &str, identity: &str, password: Option<&str>) -> Result<Uuid> {
+    async fn create_user(
+        &self,
+        name: &str,
+        identity: &str,
+        password: Option<&str>,
+    ) -> Result<Uuid> {
         let password_hash = match password {
             Some(pwd) => Some(PasswordHasher::hash_password(pwd)?),
             None => None,
         };
 
         let row = sqlx::query(
-            "INSERT INTO users (name, identity, password_hash) VALUES ($1, $2, $3) RETURNING id"
+            "INSERT INTO users (name, identity, password_hash) VALUES ($1, $2, $3) RETURNING id",
         )
         .bind(name)
         .bind(identity)
@@ -99,7 +116,7 @@ impl<'a> SampleDataLoader<'a> {
 
     async fn add_user_to_org(&self, user_id: Uuid, org_id: Uuid, roles: Vec<String>) -> Result<()> {
         sqlx::query(
-            "INSERT INTO user_organizations (user_id, organization_id, roles) VALUES ($1, $2, $3)"
+            "INSERT INTO user_organizations (user_id, organization_id, roles) VALUES ($1, $2, $3)",
         )
         .bind(user_id)
         .bind(org_id)
@@ -137,7 +154,11 @@ impl<'a> SampleDataLoader<'a> {
         let collections = vec![
             ("Jazz Collection", "All jazz albums", org_id),
             ("Rock Classics", "Classic rock albums", org_id),
-            ("Reference Books", "Technical and reference materials", org_id),
+            (
+                "Reference Books",
+                "Technical and reference materials",
+                org_id,
+            ),
             ("Rare Items", "Collectible and rare pieces", org_id),
         ];
 
@@ -158,7 +179,14 @@ impl<'a> SampleDataLoader<'a> {
     }
 
     async fn create_tags(&self, org_id: Uuid) -> Result<()> {
-        let tags = vec!["vintage", "rare", "mint-condition", "signed", "limited-edition", "favorite"];
+        let tags = vec![
+            "vintage",
+            "rare",
+            "mint-condition",
+            "signed",
+            "limited-edition",
+            "favorite",
+        ];
 
         for tag in tags {
             sqlx::query!(
@@ -173,55 +201,165 @@ impl<'a> SampleDataLoader<'a> {
         Ok(())
     }
 
-    async fn create_items_for_org(&self, org_id: Uuid, locations: &[Uuid], collections: &[Uuid]) -> Result<()> {
+    async fn create_items_for_org(
+        &self,
+        org_id: Uuid,
+        locations: &[Uuid],
+        collections: &[Uuid],
+    ) -> Result<()> {
         // Vinyl records (10 items)
-        self.create_vinyl_items(org_id, locations, collections).await?;
+        self.create_vinyl_items(org_id, locations, collections)
+            .await?;
 
         // CDs (10 items)
         self.create_cd_items(org_id, locations, collections).await?;
 
         // Cassettes (8 items)
-        self.create_cassette_items(org_id, locations, collections).await?;
+        self.create_cassette_items(org_id, locations, collections)
+            .await?;
 
         // Books (8 items)
-        self.create_book_items(org_id, locations, collections).await?;
+        self.create_book_items(org_id, locations, collections)
+            .await?;
 
         // Scores (6 items)
-        self.create_score_items(org_id, locations, collections).await?;
+        self.create_score_items(org_id, locations, collections)
+            .await?;
 
         // Electronics (4 items)
-        self.create_electronics_items(org_id, locations, collections).await?;
+        self.create_electronics_items(org_id, locations, collections)
+            .await?;
 
         // Misc (4 items)
-        self.create_misc_items(org_id, locations, collections).await?;
+        self.create_misc_items(org_id, locations, collections)
+            .await?;
 
         Ok(())
     }
 
-    async fn create_vinyl_items(&self, org_id: Uuid, locations: &[Uuid], collections: &[Uuid]) -> Result<()> {
+    async fn create_vinyl_items(
+        &self,
+        org_id: Uuid,
+        locations: &[Uuid],
+        collections: &[Uuid],
+    ) -> Result<()> {
         let vinyl_data = vec![
-            ("Kind of Blue - Miles Davis", "12_inch", "33", "stereo", 1, "near_mint", "excellent", "current"),
-            ("Abbey Road - The Beatles", "12_inch", "33", "stereo", 1, "excellent", "good", "current"),
-            ("Dark Side of the Moon - Pink Floyd", "12_inch", "33", "stereo", 1, "mint", "mint", "current"),
-            ("Thriller - Michael Jackson", "12_inch", "33", "stereo", 1, "good", "fair", "loaned"),
-            ("Rumours - Fleetwood Mac", "12_inch", "33", "stereo", 1, "excellent", "excellent", "current"),
-            ("Led Zeppelin IV", "12_inch", "33", "stereo", 1, "near_mint", "good", "current"),
-            ("The Velvet Underground & Nico", "12_inch", "33", "mono", 1, "fair", "poor", "missing"),
-            ("Pet Sounds - Beach Boys", "12_inch", "33", "stereo", 1, "excellent", "near_mint", "current"),
-            ("Blue Train - John Coltrane", "12_inch", "45", "mono", 1, "good", "good", "current"),
-            ("Greatest Hits - Various", "6_inch", "45", "mono", 1, "fair", "fair", "disposed"),
+            (
+                "Kind of Blue - Miles Davis",
+                "12_inch",
+                "33",
+                "stereo",
+                1,
+                "near_mint",
+                "excellent",
+                "current",
+            ),
+            (
+                "Abbey Road - The Beatles",
+                "12_inch",
+                "33",
+                "stereo",
+                1,
+                "excellent",
+                "good",
+                "current",
+            ),
+            (
+                "Dark Side of the Moon - Pink Floyd",
+                "12_inch",
+                "33",
+                "stereo",
+                1,
+                "mint",
+                "mint",
+                "current",
+            ),
+            (
+                "Thriller - Michael Jackson",
+                "12_inch",
+                "33",
+                "stereo",
+                1,
+                "good",
+                "fair",
+                "loaned",
+            ),
+            (
+                "Rumours - Fleetwood Mac",
+                "12_inch",
+                "33",
+                "stereo",
+                1,
+                "excellent",
+                "excellent",
+                "current",
+            ),
+            (
+                "Led Zeppelin IV",
+                "12_inch",
+                "33",
+                "stereo",
+                1,
+                "near_mint",
+                "good",
+                "current",
+            ),
+            (
+                "The Velvet Underground & Nico",
+                "12_inch",
+                "33",
+                "mono",
+                1,
+                "fair",
+                "poor",
+                "missing",
+            ),
+            (
+                "Pet Sounds - Beach Boys",
+                "12_inch",
+                "33",
+                "stereo",
+                1,
+                "excellent",
+                "near_mint",
+                "current",
+            ),
+            (
+                "Blue Train - John Coltrane",
+                "12_inch",
+                "45",
+                "mono",
+                1,
+                "good",
+                "good",
+                "current",
+            ),
+            (
+                "Greatest Hits - Various",
+                "6_inch",
+                "45",
+                "mono",
+                1,
+                "fair",
+                "fair",
+                "disposed",
+            ),
         ];
 
-        for (idx, (name, size, speed, channels, disks, media_grading, sleeve_grading, state)) in vinyl_data.iter().enumerate() {
+        for (idx, (name, size, speed, channels, disks, media_grading, sleeve_grading, state)) in
+            vinyl_data.iter().enumerate()
+        {
             let location_id = locations[idx % locations.len()];
-            let item_id = self.create_item(
-                org_id,
-                "vinyl",
-                state,
-                name,
-                &format!("A classic vinyl record: {}", name),
-                location_id,
-            ).await?;
+            let item_id = self
+                .create_item(
+                    org_id,
+                    "vinyl",
+                    state,
+                    name,
+                    &format!("A classic vinyl record: {}", name),
+                    location_id,
+                )
+                .await?;
 
             // Add vinyl details
             sqlx::query(
@@ -240,7 +378,8 @@ impl<'a> SampleDataLoader<'a> {
 
             // Add to collection
             if idx % 3 == 0 && !collections.is_empty() {
-                self.add_item_to_collection(item_id, collections[idx % collections.len()]).await?;
+                self.add_item_to_collection(item_id, collections[idx % collections.len()])
+                    .await?;
             }
 
             // Add state details
@@ -253,7 +392,7 @@ impl<'a> SampleDataLoader<'a> {
                     )
                     .execute(self.pool)
                     .await?;
-                },
+                }
                 "missing" => {
                     sqlx::query!(
                         "INSERT INTO item_missing_details (item_id, date_missing) VALUES ($1, CURRENT_DATE - INTERVAL '30 days')",
@@ -261,7 +400,7 @@ impl<'a> SampleDataLoader<'a> {
                     )
                     .execute(self.pool)
                     .await?;
-                },
+                }
                 "disposed" => {
                     sqlx::query!(
                         "INSERT INTO item_disposed_details (item_id, date_disposed) VALUES ($1, CURRENT_DATE - INTERVAL '60 days')",
@@ -269,7 +408,7 @@ impl<'a> SampleDataLoader<'a> {
                     )
                     .execute(self.pool)
                     .await?;
-                },
+                }
                 _ => {}
             }
 
@@ -286,7 +425,12 @@ impl<'a> SampleDataLoader<'a> {
         Ok(())
     }
 
-    async fn create_cd_items(&self, org_id: Uuid, locations: &[Uuid], collections: &[Uuid]) -> Result<()> {
+    async fn create_cd_items(
+        &self,
+        org_id: Uuid,
+        locations: &[Uuid],
+        collections: &[Uuid],
+    ) -> Result<()> {
         let cd_data = vec![
             ("OK Computer - Radiohead", 1, "current"),
             ("The Joshua Tree - U2", 1, "current"),
@@ -302,14 +446,16 @@ impl<'a> SampleDataLoader<'a> {
 
         for (idx, (name, disks, state)) in cd_data.iter().enumerate() {
             let location_id = locations[idx % locations.len()];
-            let item_id = self.create_item(
-                org_id,
-                "cd",
-                state,
-                name,
-                &format!("CD: {}", name),
-                location_id,
-            ).await?;
+            let item_id = self
+                .create_item(
+                    org_id,
+                    "cd",
+                    state,
+                    name,
+                    &format!("CD: {}", name),
+                    location_id,
+                )
+                .await?;
 
             sqlx::query!(
                 "INSERT INTO cd_details (item_id, disks) VALUES ($1, $2)",
@@ -332,7 +478,7 @@ impl<'a> SampleDataLoader<'a> {
                     )
                     .execute(self.pool)
                     .await?;
-                },
+                }
                 "missing" => {
                     sqlx::query!(
                         "INSERT INTO item_missing_details (item_id, date_missing) VALUES ($1, CURRENT_DATE - INTERVAL '15 days')",
@@ -340,7 +486,7 @@ impl<'a> SampleDataLoader<'a> {
                     )
                     .execute(self.pool)
                     .await?;
-                },
+                }
                 _ => {}
             }
         }
@@ -349,7 +495,12 @@ impl<'a> SampleDataLoader<'a> {
         Ok(())
     }
 
-    async fn create_cassette_items(&self, org_id: Uuid, locations: &[Uuid], _collections: &[Uuid]) -> Result<()> {
+    async fn create_cassette_items(
+        &self,
+        org_id: Uuid,
+        locations: &[Uuid],
+        _collections: &[Uuid],
+    ) -> Result<()> {
         let cassette_data = vec![
             ("Appetite for Destruction - Guns N' Roses", 1, "current"),
             ("Purple Rain - Prince", 1, "current"),
@@ -363,14 +514,16 @@ impl<'a> SampleDataLoader<'a> {
 
         for (idx, (name, cassettes, state)) in cassette_data.iter().enumerate() {
             let location_id = locations[idx % locations.len()];
-            let item_id = self.create_item(
-                org_id,
-                "cassette",
-                state,
-                name,
-                &format!("Cassette tape: {}", name),
-                location_id,
-            ).await?;
+            let item_id = self
+                .create_item(
+                    org_id,
+                    "cassette",
+                    state,
+                    name,
+                    &format!("Cassette tape: {}", name),
+                    location_id,
+                )
+                .await?;
 
             sqlx::query!(
                 "INSERT INTO cassette_details (item_id, cassettes) VALUES ($1, $2)",
@@ -394,7 +547,12 @@ impl<'a> SampleDataLoader<'a> {
         Ok(())
     }
 
-    async fn create_book_items(&self, org_id: Uuid, locations: &[Uuid], collections: &[Uuid]) -> Result<()> {
+    async fn create_book_items(
+        &self,
+        org_id: Uuid,
+        locations: &[Uuid],
+        collections: &[Uuid],
+    ) -> Result<()> {
         let book_data = vec![
             ("The Lord of the Rings - J.R.R. Tolkien", "current"),
             ("1984 - George Orwell", "current"),
@@ -408,14 +566,16 @@ impl<'a> SampleDataLoader<'a> {
 
         for (idx, (name, state)) in book_data.iter().enumerate() {
             let location_id = locations[idx % locations.len()];
-            let item_id = self.create_item(
-                org_id,
-                "book",
-                state,
-                name,
-                &format!("Book: {}", name),
-                location_id,
-            ).await?;
+            let item_id = self
+                .create_item(
+                    org_id,
+                    "book",
+                    state,
+                    name,
+                    &format!("Book: {}", name),
+                    location_id,
+                )
+                .await?;
 
             if idx % 3 == 0 && !collections.is_empty() {
                 self.add_item_to_collection(item_id, collections[2]).await?;
@@ -440,7 +600,12 @@ impl<'a> SampleDataLoader<'a> {
         Ok(())
     }
 
-    async fn create_score_items(&self, org_id: Uuid, locations: &[Uuid], _collections: &[Uuid]) -> Result<()> {
+    async fn create_score_items(
+        &self,
+        org_id: Uuid,
+        locations: &[Uuid],
+        _collections: &[Uuid],
+    ) -> Result<()> {
         let score_data = vec![
             ("Beethoven - Symphony No. 9", "current"),
             ("Bach - Well-Tempered Clavier", "current"),
@@ -452,14 +617,16 @@ impl<'a> SampleDataLoader<'a> {
 
         for (idx, (name, state)) in score_data.iter().enumerate() {
             let location_id = locations[idx % locations.len()];
-            let item_id = self.create_item(
-                org_id,
-                "score",
-                state,
-                name,
-                &format!("Musical score: {}", name),
-                location_id,
-            ).await?;
+            let item_id = self
+                .create_item(
+                    org_id,
+                    "score",
+                    state,
+                    name,
+                    &format!("Musical score: {}", name),
+                    location_id,
+                )
+                .await?;
 
             if idx == 0 {
                 self.add_tag_to_item(item_id, org_id, "rare").await?;
@@ -470,7 +637,12 @@ impl<'a> SampleDataLoader<'a> {
         Ok(())
     }
 
-    async fn create_electronics_items(&self, org_id: Uuid, locations: &[Uuid], _collections: &[Uuid]) -> Result<()> {
+    async fn create_electronics_items(
+        &self,
+        org_id: Uuid,
+        locations: &[Uuid],
+        _collections: &[Uuid],
+    ) -> Result<()> {
         let electronics_data = vec![
             ("Technics SL-1200 Turntable", "current"),
             ("Sony Walkman WM-D6C", "current"),
@@ -480,14 +652,16 @@ impl<'a> SampleDataLoader<'a> {
 
         for (idx, (name, state)) in electronics_data.iter().enumerate() {
             let location_id = locations[idx % locations.len()];
-            let item_id = self.create_item(
-                org_id,
-                "electronics",
-                state,
-                name,
-                &format!("Electronics: {}", name),
-                location_id,
-            ).await?;
+            let item_id = self
+                .create_item(
+                    org_id,
+                    "electronics",
+                    state,
+                    name,
+                    &format!("Electronics: {}", name),
+                    location_id,
+                )
+                .await?;
 
             if *state == "disposed" {
                 sqlx::query!(
@@ -507,7 +681,12 @@ impl<'a> SampleDataLoader<'a> {
         Ok(())
     }
 
-    async fn create_misc_items(&self, org_id: Uuid, locations: &[Uuid], collections: &[Uuid]) -> Result<()> {
+    async fn create_misc_items(
+        &self,
+        org_id: Uuid,
+        locations: &[Uuid],
+        collections: &[Uuid],
+    ) -> Result<()> {
         let misc_data = vec![
             ("Concert Poster - Woodstock 1969", "current"),
             ("Signed Band T-Shirt - Metallica", "current"),
@@ -517,14 +696,16 @@ impl<'a> SampleDataLoader<'a> {
 
         for (idx, (name, state)) in misc_data.iter().enumerate() {
             let location_id = locations[idx % locations.len()];
-            let item_id = self.create_item(
-                org_id,
-                "misc",
-                state,
-                name,
-                &format!("Miscellaneous item: {}", name),
-                location_id,
-            ).await?;
+            let item_id = self
+                .create_item(
+                    org_id,
+                    "misc",
+                    state,
+                    name,
+                    &format!("Miscellaneous item: {}", name),
+                    location_id,
+                )
+                .await?;
 
             if idx == 1 {
                 self.add_tag_to_item(item_id, org_id, "signed").await?;

@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 use uuid::Uuid;
 
@@ -29,7 +29,7 @@ pub async fn list_collections(
 ) -> Result<Json<Vec<Collection>>, (StatusCode, Json<ErrorResponse>)> {
     let collections = sqlx::query_as::<_, Collection>(
         "SELECT id, organization_id, name, description, notes, created_at, updated_at
-         FROM collections WHERE organization_id = $1 ORDER BY name"
+         FROM collections WHERE organization_id = $1 ORDER BY name",
     )
     .bind(org_id)
     .fetch_all(&state.pool)
@@ -62,7 +62,7 @@ pub async fn create_collection(
     let collection = sqlx::query_as::<_, Collection>(
         "INSERT INTO collections (organization_id, name, description, notes)
          VALUES ($1, $2, $3, $4)
-         RETURNING id, organization_id, name, description, notes, created_at, updated_at"
+         RETURNING id, organization_id, name, description, notes, created_at, updated_at",
     )
     .bind(org_id)
     .bind(&req.name)

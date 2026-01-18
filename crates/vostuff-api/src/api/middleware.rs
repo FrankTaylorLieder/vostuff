@@ -1,9 +1,9 @@
 use axum::{
+    Json,
     extract::{Request, State},
-    http::{header, HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode, header},
     middleware::Next,
     response::Response,
-    Json,
 };
 
 use crate::{
@@ -25,7 +25,9 @@ pub async fn auth_middleware(
         Some(token) => token,
         None => {
             // No token provided - set unauthenticated context
-            request.extensions_mut().insert(AuthContext::unauthenticated());
+            request
+                .extensions_mut()
+                .insert(AuthContext::unauthenticated());
             return Ok(next.run(request).await);
         }
     };
@@ -140,10 +142,7 @@ mod tests {
     #[test]
     fn test_extract_token_direct() {
         let mut headers = HeaderMap::new();
-        headers.insert(
-            header::AUTHORIZATION,
-            HeaderValue::from_static("abc123"),
-        );
+        headers.insert(header::AUTHORIZATION, HeaderValue::from_static("abc123"));
 
         let token = extract_token_from_headers(&headers);
         assert_eq!(token, Some("abc123".to_string()));

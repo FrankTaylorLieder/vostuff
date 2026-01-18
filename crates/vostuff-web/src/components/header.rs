@@ -4,10 +4,7 @@ use leptos_router::*;
 use crate::server_fns::auth::logout;
 
 #[component]
-pub fn Header(
-    #[prop(into)] username: String,
-    #[prop(into)] org_name: String,
-) -> impl IntoView {
+pub fn Header(#[prop(into)] username: String, #[prop(into)] org_name: String) -> impl IntoView {
     let navigate = use_navigate();
 
     let handle_logout = create_action(move |_: &()| {

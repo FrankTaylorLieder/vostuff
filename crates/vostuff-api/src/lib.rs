@@ -1,5 +1,5 @@
-pub mod schema;
 pub mod api;
+pub mod schema;
 pub mod test_utils;
 
 // Re-export core modules for convenience

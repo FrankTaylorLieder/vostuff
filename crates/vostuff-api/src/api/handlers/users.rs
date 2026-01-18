@@ -1,12 +1,15 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 use uuid::Uuid;
 
 use crate::api::{
-    models::{AddUserToOrgRequest, CreateUserRequest, ErrorResponse, Organization, UpdateUserOrgRolesRequest, UpdateUserRequest, User, UserOrganization},
+    models::{
+        AddUserToOrgRequest, CreateUserRequest, ErrorResponse, Organization,
+        UpdateUserOrgRolesRequest, UpdateUserRequest, User, UserOrganization,
+    },
     state::AppState,
 };
 use crate::auth::PasswordHasher;
@@ -24,10 +27,12 @@ use crate::auth::PasswordHasher;
 pub async fn list_users(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<User>>, (StatusCode, Json<ErrorResponse>)> {
-    let users = sqlx::query_as::<_, User>("SELECT id, name, identity, password_hash, created_at, updated_at FROM users ORDER BY name")
-        .fetch_all(&state.pool)
-        .await
-        .map_err(internal_error)?;
+    let users = sqlx::query_as::<_, User>(
+        "SELECT id, name, identity, password_hash, created_at, updated_at FROM users ORDER BY name",
+    )
+    .fetch_all(&state.pool)
+    .await
+    .map_err(internal_error)?;
 
     Ok(Json(users))
 }
@@ -51,7 +56,7 @@ pub async fn get_user(
     Path(user_id): Path<Uuid>,
 ) -> Result<Json<User>, (StatusCode, Json<ErrorResponse>)> {
     let user = sqlx::query_as::<_, User>(
-        "SELECT id, name, identity, password_hash, created_at, updated_at FROM users WHERE id = $1"
+        "SELECT id, name, identity, password_hash, created_at, updated_at FROM users WHERE id = $1",
     )
     .bind(user_id)
     .fetch_optional(&state.pool)
@@ -95,7 +100,7 @@ pub async fn create_user(
 
     let user = sqlx::query_as::<_, User>(
         "INSERT INTO users (name, identity, password_hash) VALUES ($1, $2, $3)
-         RETURNING id, name, identity, password_hash, created_at, updated_at"
+         RETURNING id, name, identity, password_hash, created_at, updated_at",
     )
     .bind(&req.name)
     .bind(&req.identity)
@@ -150,7 +155,9 @@ pub async fn update_user(
         query.push_str(&format!(", password_hash = ${}", param_num));
     }
 
-    query.push_str(" WHERE id = $1 RETURNING id, name, identity, password_hash, created_at, updated_at");
+    query.push_str(
+        " WHERE id = $1 RETURNING id, name, identity, password_hash, created_at, updated_at",
+    );
 
     let mut query_builder = sqlx::query_as::<_, User>(&query).bind(user_id);
 
@@ -258,7 +265,7 @@ pub async fn list_user_organizations(
          FROM organizations o
          INNER JOIN user_organizations uo ON o.id = uo.organization_id
          WHERE uo.user_id = $1
-         ORDER BY o.name"
+         ORDER BY o.name",
     )
     .bind(user_id)
     .fetch_all(&state.pool)
@@ -324,14 +331,15 @@ pub async fn add_user_to_organization(
     }
 
     // Prepare roles - default to USER if not provided
-    let roles: Vec<String> = req.roles
+    let roles: Vec<String> = req
+        .roles
         .map(|r| r.iter().map(|role| role.as_str().to_string()).collect())
         .unwrap_or_else(|| vec!["USER".to_string()]);
 
     // Add user to organization
     let result = sqlx::query_as::<_, UserOrganization>(
         "INSERT INTO user_organizations (user_id, organization_id, roles) VALUES ($1, $2, $3)
-         RETURNING user_id, organization_id, roles, created_at"
+         RETURNING user_id, organization_id, roles, created_at",
     )
     .bind(user_id)
     .bind(org_id)
@@ -341,15 +349,13 @@ pub async fn add_user_to_organization(
 
     match result {
         Ok(user_org) => Ok((StatusCode::CREATED, Json(user_org))),
-        Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
-            Err((
-                StatusCode::CONFLICT,
-                Json(ErrorResponse {
-                    error: "conflict".to_string(),
-                    message: "User already in organization".to_string(),
-                }),
-            ))
-        }
+        Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => Err((
+            StatusCode::CONFLICT,
+            Json(ErrorResponse {
+                error: "conflict".to_string(),
+                message: "User already in organization".to_string(),
+            }),
+        )),
         Err(err) => Err(internal_error(err)),
     }
 }
@@ -376,7 +382,9 @@ pub async fn update_user_org_roles(
     Json(req): Json<UpdateUserOrgRolesRequest>,
 ) -> Result<Json<UserOrganization>, (StatusCode, Json<ErrorResponse>)> {
     // Convert UserRole to strings
-    let roles: Vec<String> = req.roles.iter()
+    let roles: Vec<String> = req
+        .roles
+        .iter()
         .map(|role| role.as_str().to_string())
         .collect();
 
@@ -385,7 +393,7 @@ pub async fn update_user_org_roles(
         "UPDATE user_organizations
          SET roles = $3
          WHERE user_id = $1 AND organization_id = $2
-         RETURNING user_id, organization_id, roles, created_at"
+         RETURNING user_id, organization_id, roles, created_at",
     )
     .bind(user_id)
     .bind(org_id)
@@ -425,12 +433,13 @@ pub async fn remove_user_from_organization(
     State(state): State<AppState>,
     Path((user_id, org_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
-    let result = sqlx::query("DELETE FROM user_organizations WHERE user_id = $1 AND organization_id = $2")
-        .bind(user_id)
-        .bind(org_id)
-        .execute(&state.pool)
-        .await
-        .map_err(internal_error)?;
+    let result =
+        sqlx::query("DELETE FROM user_organizations WHERE user_id = $1 AND organization_id = $2")
+            .bind(user_id)
+            .bind(org_id)
+            .execute(&state.pool)
+            .await
+            .map_err(internal_error)?;
 
     if result.rows_affected() == 0 {
         Err((

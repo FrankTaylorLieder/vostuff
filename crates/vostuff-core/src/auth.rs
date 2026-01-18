@@ -1,10 +1,12 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher as ArgonHasher, PasswordVerifier, SaltString},
     Argon2,
+    password_hash::{
+        PasswordHash, PasswordHasher as ArgonHasher, PasswordVerifier, SaltString, rand_core::OsRng,
+    },
 };
 use chrono::{Duration, Utc};
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -16,27 +18,30 @@ impl PasswordHasher {
     pub fn hash_password(password: &str) -> Result<String> {
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
-        let password_hash = <Argon2 as ArgonHasher>::hash_password(&argon2, password.as_bytes(), &salt)
-            .map_err(|e| anyhow!("Failed to hash password: {}", e))?;
+        let password_hash =
+            <Argon2 as ArgonHasher>::hash_password(&argon2, password.as_bytes(), &salt)
+                .map_err(|e| anyhow!("Failed to hash password: {}", e))?;
         Ok(password_hash.to_string())
     }
 
     /// Verify a password against a stored hash
     pub fn verify_password(password: &str, hash: &str) -> Result<bool> {
-        let parsed_hash = PasswordHash::new(hash)
-            .map_err(|e| anyhow!("Failed to parse password hash: {}", e))?;
+        let parsed_hash =
+            PasswordHash::new(hash).map_err(|e| anyhow!("Failed to parse password hash: {}", e))?;
         let argon2 = Argon2::default();
-        Ok(argon2.verify_password(password.as_bytes(), &parsed_hash).is_ok())
+        Ok(argon2
+            .verify_password(password.as_bytes(), &parsed_hash)
+            .is_ok())
     }
 }
 
 /// JWT token claims for authenticated users
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: Uuid,              // Subject (user ID)
-    pub identity: String,       // User identity (email)
-    pub organization_id: Uuid,  // Selected organization
-    pub roles: Vec<String>,     // User roles in this organization
+    pub sub: Uuid,             // Subject (user ID)
+    pub identity: String,      // User identity (email)
+    pub organization_id: Uuid, // Selected organization
+    pub roles: Vec<String>,    // User roles in this organization
     pub iat: i64,              // Issued at
     pub exp: i64,              // Expiration time
 }
@@ -44,8 +49,8 @@ pub struct Claims {
 /// Follow-on token claims for org selection (short-lived)
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FollowOnClaims {
-    pub sub: Uuid,         // Subject (user ID)
-    pub identity: String,  // User identity (email)
+    pub sub: Uuid,        // Subject (user ID)
+    pub identity: String, // User identity (email)
     pub iat: i64,         // Issued at
     pub exp: i64,         // Expiration time (5 minutes)
 }
@@ -99,11 +104,7 @@ impl TokenManager {
     }
 
     /// Generate a follow-on token for org selection (5 minute expiry)
-    pub fn generate_follow_on_token(
-        &self,
-        user_id: Uuid,
-        identity: String,
-    ) -> Result<String> {
+    pub fn generate_follow_on_token(&self, user_id: Uuid, identity: String) -> Result<String> {
         let now = Utc::now();
         let exp = now + Duration::minutes(5);
 
@@ -219,7 +220,9 @@ mod tests {
         let roles = vec!["USER".to_string(), "ADMIN".to_string()];
 
         // Generate token
-        let token = manager.generate_token(user_id, identity.clone(), org_id, roles.clone(), 24).unwrap();
+        let token = manager
+            .generate_token(user_id, identity.clone(), org_id, roles.clone(), 24)
+            .unwrap();
 
         // Validate token
         let claims = manager.validate_token(&token).unwrap();
@@ -236,7 +239,9 @@ mod tests {
         let identity = "test@example.com".to_string();
 
         // Generate follow-on token
-        let token = manager.generate_follow_on_token(user_id, identity.clone()).unwrap();
+        let token = manager
+            .generate_follow_on_token(user_id, identity.clone())
+            .unwrap();
 
         // Validate token
         let claims = manager.validate_follow_on_token(&token).unwrap();

@@ -1,6 +1,6 @@
 pub mod app;
-pub mod pages;
 pub mod components;
+pub mod pages;
 pub mod server_fns;
 
 use leptos::*;

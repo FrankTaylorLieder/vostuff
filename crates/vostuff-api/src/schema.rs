@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sqlx::{migrate::MigrateDatabase, PgPool, Postgres};
+use sqlx::{PgPool, Postgres, migrate::MigrateDatabase};
 
 pub struct SchemaManager {
     pool: PgPool,
@@ -12,7 +12,7 @@ impl SchemaManager {
         }
 
         let pool = PgPool::connect(database_url).await?;
-        
+
         Ok(Self { pool })
     }
 
@@ -25,11 +25,11 @@ impl SchemaManager {
         sqlx::query("DROP SCHEMA public CASCADE")
             .execute(&self.pool)
             .await?;
-        
+
         sqlx::query("CREATE SCHEMA public")
             .execute(&self.pool)
             .await?;
-        
+
         self.run_migrations().await?;
         Ok(())
     }

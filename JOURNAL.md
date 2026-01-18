@@ -1,5 +1,64 @@
 # VOStuff Project Journal
 
+## 2026-01-18 - Main Items Table View Implementation
+
+**Prompts:**
+1. "Implement the following plan: # Plan: Main Items Table View ..."
+
+**Claude's Response:**
+
+Implemented the main items table view feature for the home page, showing paginated items for the current user's organization. The implementation follows the planned structure with server functions, reusable components, and proper Leptos patterns.
+
+**Files Created:**
+- `crates/vostuff-web/src/server_fns/items.rs` - Server functions for fetching items and locations:
+  - `get_items(org_id, page, per_page)` - Fetches paginated items from the REST API
+  - `get_locations(org_id)` - Fetches all locations for resolving location IDs to names
+  - Type definitions: `Item`, `ItemType`, `ItemState`, `Location`, `PaginatedResponse<T>`
+  - Helper methods for display names and CSS classes
+
+- `crates/vostuff-web/src/components/pagination.rs` - Reusable pagination component:
+  - "X-Y of Z items" indicator
+  - Previous/Next navigation buttons
+  - Page size selector (10, 25, 50, 100)
+  - Proper signal handling for reactive updates
+
+- `crates/vostuff-web/src/components/items_table.rs` - Items table component:
+  - Four columns: Type, Name, State, Location
+  - Color-coded state badges (green=current, yellow=loaned, red=missing, gray=disposed)
+  - Expandable rows showing additional details (description, notes, dates)
+  - Click-to-expand/collapse functionality
+
+**Files Modified:**
+- `crates/vostuff-web/src/server_fns/mod.rs` - Added `pub mod items;`
+- `crates/vostuff-web/src/components/mod.rs` - Added `pub mod items_table;` and `pub mod pagination;`
+- `crates/vostuff-web/style/main.css` - Added comprehensive styles for:
+  - `.items-table` - Table styling with hover effects
+  - `.state-badge` variants - Color-coded state indicators
+  - `.pagination` - Pagination controls layout
+  - `.item-expanded` / `.item-details` - Expanded row styling
+  - `.empty-state` - Empty state message styling
+- `crates/vostuff-web/src/pages/home.rs` - Replaced placeholder content with:
+  - `AuthenticatedHome` component for logged-in users
+  - Items table with pagination integration
+  - Reactive data fetching with `create_resource`
+  - Location lookup via HashMap for efficient name resolution
+  - Loading states and error handling
+
+**Technical Details:**
+- Server functions extract auth token from HTTP-only cookies (SSR only)
+- Parallel data fetching for items and locations using Leptos resources
+- Location IDs resolved to names using HashMap for O(1) lookup
+- Pagination state managed with Leptos signals for reactivity
+- Items refetched automatically when page or per_page changes
+- Empty state shown when organization has no items
+
+**Build Results:**
+- All code compiles successfully
+- Clippy passes with no new warnings
+- vostuff-web package tests pass (no existing tests)
+
+---
+
 ## 2026-01-18 - Added Quick Start Section to README
 
 **Prompts:**

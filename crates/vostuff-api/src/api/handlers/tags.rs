@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 use uuid::Uuid;
 
@@ -29,7 +29,7 @@ pub async fn list_tags(
 ) -> Result<Json<Vec<Tag>>, (StatusCode, Json<ErrorResponse>)> {
     let tags = sqlx::query_as::<_, Tag>(
         "SELECT organization_id, name, created_at
-         FROM tags WHERE organization_id = $1 ORDER BY name"
+         FROM tags WHERE organization_id = $1 ORDER BY name",
     )
     .bind(org_id)
     .fetch_all(&state.pool)
@@ -61,7 +61,7 @@ pub async fn create_tag(
 ) -> Result<(StatusCode, Json<Tag>), (StatusCode, Json<ErrorResponse>)> {
     let tag = sqlx::query_as::<_, Tag>(
         "INSERT INTO tags (organization_id, name) VALUES ($1, $2)
-         RETURNING organization_id, name, created_at"
+         RETURNING organization_id, name, created_at",
     )
     .bind(org_id)
     .bind(&req.name)

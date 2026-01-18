@@ -1,13 +1,16 @@
 use axum::{
+    Json,
     extract::{Path, Query, State},
     http::StatusCode,
-    Json,
 };
 use sqlx::{FromRow, Row};
 use uuid::Uuid;
 
 use crate::api::{
-    models::{CreateItemRequest, ErrorResponse, Item, ItemState, ItemType, PaginatedResponse, PaginationParams, UpdateItemRequest},
+    models::{
+        CreateItemRequest, ErrorResponse, Item, ItemState, ItemType, PaginatedResponse,
+        PaginationParams, UpdateItemRequest,
+    },
     state::AppState,
 };
 
@@ -33,11 +36,12 @@ pub async fn list_items(
     let offset = (pagination.page - 1) * pagination.per_page;
 
     // Get total count
-    let total_result = sqlx::query("SELECT COUNT(*) as count FROM items WHERE organization_id = $1")
-        .bind(org_id)
-        .fetch_one(&state.pool)
-        .await
-        .map_err(internal_error)?;
+    let total_result =
+        sqlx::query("SELECT COUNT(*) as count FROM items WHERE organization_id = $1")
+            .bind(org_id)
+            .fetch_one(&state.pool)
+            .await
+            .map_err(internal_error)?;
 
     let total: i64 = total_result.get("count");
 
@@ -46,7 +50,7 @@ pub async fn list_items(
         "SELECT id, organization_id, item_type::text, state::text, name, description, notes,
          location_id, date_entered, date_acquired, created_at, updated_at
          FROM items WHERE organization_id = $1
-         ORDER BY created_at DESC LIMIT $2 OFFSET $3"
+         ORDER BY created_at DESC LIMIT $2 OFFSET $3",
     )
     .bind(org_id)
     .bind(pagination.per_page)
@@ -89,7 +93,7 @@ pub async fn get_item(
     let item = sqlx::query_as::<_, ItemRow>(
         "SELECT id, organization_id, item_type::text, state::text, name, description, notes,
          location_id, date_entered, date_acquired, created_at, updated_at
-         FROM items WHERE id = $1 AND organization_id = $2"
+         FROM items WHERE id = $1 AND organization_id = $2",
     )
     .bind(item_id)
     .bind(org_id)

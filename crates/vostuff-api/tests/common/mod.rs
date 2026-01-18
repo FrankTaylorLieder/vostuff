@@ -1,17 +1,14 @@
 use axum::{
+    Router,
     body::Body,
     http::{Request, StatusCode},
-    Router,
 };
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use sqlx::PgPool;
 use tower::ServiceExt;
 use uuid::Uuid;
-use vostuff_api::api::{
-    models::LoginRequest,
-    state::AppState,
-};
+use vostuff_api::api::{models::LoginRequest, state::AppState};
 use vostuff_core::auth::PasswordHasher;
 
 /// Test context that holds database pool and app state
@@ -25,8 +22,9 @@ impl TestContext {
     /// Create a new test context with a fresh database
     pub async fn new() -> Self {
         // Use test database URL
-        let database_url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev".to_string());
+        let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev".to_string()
+        });
 
         let pool = PgPool::connect(&database_url)
             .await
@@ -90,8 +88,8 @@ impl TestContext {
 
     /// Create a test user with password
     pub async fn create_user(&self, name: &str, identity: &str, password: &str) -> Uuid {
-        let password_hash = PasswordHasher::hash_password(password)
-            .expect("Failed to hash password");
+        let password_hash =
+            PasswordHasher::hash_password(password).expect("Failed to hash password");
 
         let rec = sqlx::query!(
             "INSERT INTO users (name, identity, password_hash) VALUES ($1, $2, $3) RETURNING id",
@@ -127,14 +125,18 @@ impl TestContext {
             organization_id: org_id,
         };
 
-        let response = self
-            .post("/api/auth/login", &login_req, None)
-            .await;
+        let response = self.post("/api/auth/login", &login_req, None).await;
 
-        assert_eq!(response.status, StatusCode::OK, "Login failed: {:?}", response.body);
+        assert_eq!(
+            response.status,
+            StatusCode::OK,
+            "Login failed: {:?}",
+            response.body
+        );
 
         // Parse response - could be LoginResponse or OrgSelectionResponse
-        let value: Value = serde_json::from_value(response.body).expect("Failed to parse login response");
+        let value: Value =
+            serde_json::from_value(response.body).expect("Failed to parse login response");
 
         if let Some(token) = value.get("token").and_then(|t| t.as_str()) {
             token.to_string()
@@ -149,12 +151,22 @@ impl TestContext {
     }
 
     /// Make a POST request
-    pub async fn post<T: serde::Serialize>(&self, path: &str, body: &T, token: Option<&str>) -> TestResponse {
+    pub async fn post<T: serde::Serialize>(
+        &self,
+        path: &str,
+        body: &T,
+        token: Option<&str>,
+    ) -> TestResponse {
         self.request("POST", path, Some(body), token).await
     }
 
     /// Make a PATCH request
-    pub async fn patch<T: serde::Serialize>(&self, path: &str, body: &T, token: Option<&str>) -> TestResponse {
+    pub async fn patch<T: serde::Serialize>(
+        &self,
+        path: &str,
+        body: &T,
+        token: Option<&str>,
+    ) -> TestResponse {
         self.request("PATCH", path, Some(body), token).await
     }
 
@@ -171,9 +183,7 @@ impl TestContext {
         body: Option<&T>,
         token: Option<&str>,
     ) -> TestResponse {
-        let mut request_builder = Request::builder()
-            .method(method)
-            .uri(path);
+        let mut request_builder = Request::builder().method(method).uri(path);
 
         // Add Authorization header if token provided
         if let Some(token) = token {
@@ -210,9 +220,7 @@ impl TestContext {
             Value::Null
         } else {
             serde_json::from_slice(&body_bytes)
-                .unwrap_or_else(|_| {
-                    Value::String(String::from_utf8_lossy(&body_bytes).to_string())
-                })
+                .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&body_bytes).to_string()))
         };
 
         TestResponse { status, body }
@@ -229,8 +237,7 @@ pub struct TestResponse {
 impl TestResponse {
     /// Parse body as JSON into type T
     pub fn json<T: DeserializeOwned>(&self) -> T {
-        serde_json::from_value(self.body.clone())
-            .expect("Failed to deserialize response body")
+        serde_json::from_value(self.body.clone()).expect("Failed to deserialize response body")
     }
 
     /// Assert that status code matches expected
@@ -247,7 +254,8 @@ impl TestResponse {
         assert!(
             self.status.is_success(),
             "Expected success status, got {}. Body: {:?}",
-            self.status, self.body
+            self.status,
+            self.body
         );
     }
 }
@@ -257,9 +265,9 @@ pub struct TestFixture {
     pub ctx: TestContext,
     pub org1_id: Uuid,
     pub org2_id: Uuid,
-    pub user1_id: Uuid,  // User in org1 with USER role
-    pub user2_id: Uuid,  // User in org1 with ADMIN role
-    pub user3_id: Uuid,  // User in org2 with USER role
+    pub user1_id: Uuid, // User in org1 with USER role
+    pub user2_id: Uuid, // User in org1 with ADMIN role
+    pub user3_id: Uuid, // User in org2 with USER role
     pub user1_token: String,
     pub user2_token: String,
     pub user3_token: String,
@@ -271,23 +279,46 @@ impl TestFixture {
         let ctx = TestContext::new().await;
 
         // Create organizations
-        let org1_id = ctx.create_organization("Test Org 1", "First test organization").await;
-        let org2_id = ctx.create_organization("Test Org 2", "Second test organization").await;
+        let org1_id = ctx
+            .create_organization("Test Org 1", "First test organization")
+            .await;
+        let org2_id = ctx
+            .create_organization("Test Org 2", "Second test organization")
+            .await;
 
         // Create users
-        let user1_id = ctx.create_user("User One", "user1@test.com", "password123").await;
-        let user2_id = ctx.create_user("User Two", "user2@test.com", "password123").await;
-        let user3_id = ctx.create_user("User Three", "user3@test.com", "password123").await;
+        let user1_id = ctx
+            .create_user("User One", "user1@test.com", "password123")
+            .await;
+        let user2_id = ctx
+            .create_user("User Two", "user2@test.com", "password123")
+            .await;
+        let user3_id = ctx
+            .create_user("User Three", "user3@test.com", "password123")
+            .await;
 
         // Add users to organizations with roles
-        ctx.add_user_to_org(user1_id, org1_id, vec!["USER".to_string()]).await;
-        ctx.add_user_to_org(user2_id, org1_id, vec!["USER".to_string(), "ADMIN".to_string()]).await;
-        ctx.add_user_to_org(user3_id, org2_id, vec!["USER".to_string()]).await;
+        ctx.add_user_to_org(user1_id, org1_id, vec!["USER".to_string()])
+            .await;
+        ctx.add_user_to_org(
+            user2_id,
+            org1_id,
+            vec!["USER".to_string(), "ADMIN".to_string()],
+        )
+        .await;
+        ctx.add_user_to_org(user3_id, org2_id, vec!["USER".to_string()])
+            .await;
 
         // Login users to get tokens
-        let user1_token = ctx.login("user1@test.com", "password123", Some(org1_id)).await;
-        let user2_token = ctx.login("user2@test.com", "password123", Some(org1_id)).await;
-        let user3_token = ctx.login("user3@test.com", "password123", Some(org2_id)).await;
+        let user1_token = ctx
+            .login("user1@test.com", "password123", Some(org1_id))
+            .await;
+        let user2_token = ctx
+            .login("user2@test.com", "password123", Some(org1_id))
+            .await;
+        let user3_token = ctx
+            .login("user3@test.com", "password123", Some(org2_id))
+            .await;
 
         Self {
             ctx,

@@ -1,5 +1,5 @@
-use leptos::*;
 use leptos::server_fn::error::NoCustomError;
+use leptos::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -46,12 +46,12 @@ pub async fn login(
     password: String,
     organization_id: Option<Uuid>,
 ) -> Result<Result<LoginResponse, OrgSelectionResponse>, ServerFnError<NoCustomError>> {
-    use leptos_axum::ResponseOptions;
     use axum::http::HeaderValue;
+    use leptos_axum::ResponseOptions;
 
     // Get API base URL from environment
-    let api_base_url = std::env::var("API_BASE_URL")
-        .unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let api_base_url =
+        std::env::var("API_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
 
     // Prepare login request
     let login_req = serde_json::json!({
@@ -67,18 +67,27 @@ pub async fn login(
         .json(&login_req)
         .send()
         .await
-        .map_err(|e| ServerFnError::<NoCustomError>::ServerError(format!("API request failed: {}", e)))?;
+        .map_err(|e| {
+            ServerFnError::<NoCustomError>::ServerError(format!("API request failed: {}", e))
+        })?;
 
     let status = response.status();
 
     if !status.is_success() {
-        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(ServerFnError::<NoCustomError>::ServerError(format!("Login failed: {}", error_text)));
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(ServerFnError::<NoCustomError>::ServerError(format!(
+            "Login failed: {}",
+            error_text
+        )));
     }
 
     // Try to parse as LoginResponse first (direct login)
-    let body = response.text().await
-        .map_err(|e| ServerFnError::<NoCustomError>::ServerError(format!("Failed to read response: {}", e)))?;
+    let body = response.text().await.map_err(|e| {
+        ServerFnError::<NoCustomError>::ServerError(format!("Failed to read response: {}", e))
+    })?;
 
     // Try to deserialize as LoginResponse
     if let Ok(login_resp) = serde_json::from_str::<LoginResponse>(&body) {
@@ -86,8 +95,7 @@ pub async fn login(
         let response_options = expect_context::<ResponseOptions>();
         let cookie = format!(
             "auth_token={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
-            login_resp.token,
-            login_resp.expires_in
+            login_resp.token, login_resp.expires_in
         );
         response_options.insert_header(
             axum::http::header::SET_COOKIE,
@@ -100,7 +108,9 @@ pub async fn login(
     // Otherwise, try to parse as OrgSelectionResponse
     serde_json::from_str::<OrgSelectionResponse>(&body)
         .map(Err)
-        .map_err(|e| ServerFnError::<NoCustomError>::ServerError(format!("Failed to parse response: {}", e)))
+        .map_err(|e| {
+            ServerFnError::<NoCustomError>::ServerError(format!("Failed to parse response: {}", e))
+        })
 }
 
 // Server function to handle organization selection
@@ -109,12 +119,12 @@ pub async fn select_organization(
     follow_on_token: String,
     organization_id: Uuid,
 ) -> Result<LoginResponse, ServerFnError<NoCustomError>> {
-    use leptos_axum::ResponseOptions;
     use axum::http::HeaderValue;
+    use leptos_axum::ResponseOptions;
 
     // Get API base URL from environment
-    let api_base_url = std::env::var("API_BASE_URL")
-        .unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let api_base_url =
+        std::env::var("API_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
 
     // Prepare request
     let select_req = serde_json::json!({
@@ -129,24 +139,32 @@ pub async fn select_organization(
         .json(&select_req)
         .send()
         .await
-        .map_err(|e| ServerFnError::<NoCustomError>::ServerError(format!("API request failed: {}", e)))?;
+        .map_err(|e| {
+            ServerFnError::<NoCustomError>::ServerError(format!("API request failed: {}", e))
+        })?;
 
     let status = response.status();
 
     if !status.is_success() {
-        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(ServerFnError::<NoCustomError>::ServerError(format!("Org selection failed: {}", error_text)));
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(ServerFnError::<NoCustomError>::ServerError(format!(
+            "Org selection failed: {}",
+            error_text
+        )));
     }
 
-    let login_resp: LoginResponse = response.json().await
-        .map_err(|e| ServerFnError::<NoCustomError>::ServerError(format!("Failed to parse response: {}", e)))?;
+    let login_resp: LoginResponse = response.json().await.map_err(|e| {
+        ServerFnError::<NoCustomError>::ServerError(format!("Failed to parse response: {}", e))
+    })?;
 
     // Set the JWT token in HTTP-only cookie
     let response_options = expect_context::<ResponseOptions>();
     let cookie = format!(
         "auth_token={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
-        login_resp.token,
-        login_resp.expires_in
+        login_resp.token, login_resp.expires_in
     );
     response_options.insert_header(
         axum::http::header::SET_COOKIE,
@@ -159,12 +177,13 @@ pub async fn select_organization(
 // Server function to get current authenticated user
 #[server(GetCurrentUser, "/api")]
 pub async fn get_current_user() -> Result<Option<UserInfo>, ServerFnError<NoCustomError>> {
-    use leptos_axum::extract;
     use axum::http::header::COOKIE;
+    use leptos_axum::extract;
 
     // Get cookies from request headers
-    let headers = extract::<axum::http::HeaderMap>().await
-        .map_err(|e| ServerFnError::<NoCustomError>::ServerError(format!("Failed to extract headers: {}", e)))?;
+    let headers = extract::<axum::http::HeaderMap>().await.map_err(|e| {
+        ServerFnError::<NoCustomError>::ServerError(format!("Failed to extract headers: {}", e))
+    })?;
 
     // Parse cookies to find auth_token
     let auth_token = headers
@@ -185,8 +204,8 @@ pub async fn get_current_user() -> Result<Option<UserInfo>, ServerFnError<NoCust
     };
 
     // Get API base URL from environment
-    let api_base_url = std::env::var("API_BASE_URL")
-        .unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let api_base_url =
+        std::env::var("API_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
 
     // Call the /api/auth/me endpoint to get user info
     let client = reqwest::Client::new();
@@ -195,7 +214,9 @@ pub async fn get_current_user() -> Result<Option<UserInfo>, ServerFnError<NoCust
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .await
-        .map_err(|e| ServerFnError::<NoCustomError>::ServerError(format!("API request failed: {}", e)))?;
+        .map_err(|e| {
+            ServerFnError::<NoCustomError>::ServerError(format!("API request failed: {}", e))
+        })?;
 
     // If unauthorized (401), return None (user not logged in or token invalid)
     if response.status() == 401 {
@@ -206,9 +227,10 @@ pub async fn get_current_user() -> Result<Option<UserInfo>, ServerFnError<NoCust
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(ServerFnError::<NoCustomError>::ServerError(
-            format!("Failed to get user info: {} - {}", status, body)
-        ));
+        return Err(ServerFnError::<NoCustomError>::ServerError(format!(
+            "Failed to get user info: {} - {}",
+            status, body
+        )));
     }
 
     // Parse the response - it should match our UserInfo structure
@@ -234,8 +256,9 @@ pub async fn get_current_user() -> Result<Option<UserInfo>, ServerFnError<NoCust
         updated_at: chrono::DateTime<chrono::Utc>,
     }
 
-    let api_user_info: ApiUserInfo = response.json().await
-        .map_err(|e| ServerFnError::<NoCustomError>::ServerError(format!("Failed to parse response: {}", e)))?;
+    let api_user_info: ApiUserInfo = response.json().await.map_err(|e| {
+        ServerFnError::<NoCustomError>::ServerError(format!("Failed to parse response: {}", e))
+    })?;
 
     // Convert to our UserInfo type
     let user_info = UserInfo {
@@ -255,8 +278,8 @@ pub async fn get_current_user() -> Result<Option<UserInfo>, ServerFnError<NoCust
 // Server function to handle logout
 #[server(Logout, "/api")]
 pub async fn logout() -> Result<(), ServerFnError<NoCustomError>> {
-    use leptos_axum::ResponseOptions;
     use axum::http::HeaderValue;
+    use leptos_axum::ResponseOptions;
 
     // Clear the auth cookie
     let response_options = expect_context::<ResponseOptions>();

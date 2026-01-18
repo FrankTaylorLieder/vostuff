@@ -103,8 +103,9 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     // Get database URL and JWT secret
-    let database_url = env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev".to_string());
+    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev".to_string()
+    });
 
     let jwt_secret = env::var("JWT_SECRET")
         .unwrap_or_else(|_| "dev_secret_key_change_in_production".to_string());

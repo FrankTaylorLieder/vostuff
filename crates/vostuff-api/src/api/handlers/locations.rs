@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 use uuid::Uuid;
 
@@ -29,7 +29,7 @@ pub async fn list_locations(
 ) -> Result<Json<Vec<Location>>, (StatusCode, Json<ErrorResponse>)> {
     let locations = sqlx::query_as::<_, Location>(
         "SELECT id, organization_id, name, created_at, updated_at
-         FROM locations WHERE organization_id = $1 ORDER BY name"
+         FROM locations WHERE organization_id = $1 ORDER BY name",
     )
     .bind(org_id)
     .fetch_all(&state.pool)
@@ -61,7 +61,7 @@ pub async fn create_location(
 ) -> Result<(StatusCode, Json<Location>), (StatusCode, Json<ErrorResponse>)> {
     let location = sqlx::query_as::<_, Location>(
         "INSERT INTO locations (organization_id, name) VALUES ($1, $2)
-         RETURNING id, organization_id, name, created_at, updated_at"
+         RETURNING id, organization_id, name, created_at, updated_at",
     )
     .bind(org_id)
     .bind(&req.name)

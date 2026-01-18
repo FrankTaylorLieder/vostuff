@@ -1,15 +1,15 @@
 use axum::{
+    Json,
     extract::{Request, State},
     http::StatusCode,
-    Json,
 };
 use uuid::Uuid;
 
 use crate::{
     api::{
         models::{
-            ErrorResponse, LoginRequest, LoginResponse, OrgSelectionResponse,
-            Organization, OrganizationWithRoles, SelectOrgRequest, UserInfo,
+            ErrorResponse, LoginRequest, LoginResponse, OrgSelectionResponse, Organization,
+            OrganizationWithRoles, SelectOrgRequest, UserInfo,
         },
         state::AppState,
     },
@@ -45,7 +45,7 @@ pub async fn login(
 
     // Get user by identity (no roles in users table anymore)
     let user_row = sqlx::query_as::<_, (uuid::Uuid, String, String, Option<String>)>(
-        "SELECT id, name, identity, password_hash FROM users WHERE identity = $1"
+        "SELECT id, name, identity, password_hash FROM users WHERE identity = $1",
     )
     .bind(&req.identity)
     .fetch_optional(&state.pool)
@@ -64,8 +64,8 @@ pub async fn login(
     };
 
     // Verify password
-    let is_valid = PasswordHasher::verify_password(&req.password, &password_hash)
-        .map_err(internal_error)?;
+    let is_valid =
+        PasswordHasher::verify_password(&req.password, &password_hash).map_err(internal_error)?;
 
     if !is_valid {
         return Err(invalid_credentials_error());
@@ -77,7 +77,7 @@ pub async fn login(
          FROM organizations o
          INNER JOIN user_organizations uo ON o.id = uo.organization_id
          WHERE uo.user_id = $1
-         ORDER BY o.name"
+         ORDER BY o.name",
     )
     .bind(user_id)
     .fetch_all(&state.pool)
@@ -99,15 +99,18 @@ pub async fn login(
     // If organization_id provided, use it
     if let Some(org_id) = req.organization_id {
         // Find the requested organization
-        let org_data = org_rows.iter()
+        let org_data = org_rows
+            .iter()
             .find(|(id, _, _, _)| *id == org_id)
-            .ok_or_else(|| (
-                StatusCode::FORBIDDEN,
-                Json(ErrorResponse {
-                    error: "invalid_organization".to_string(),
-                    message: "User is not a member of the specified organization".to_string(),
-                }),
-            ))?;
+            .ok_or_else(|| {
+                (
+                    StatusCode::FORBIDDEN,
+                    Json(ErrorResponse {
+                        error: "invalid_organization".to_string(),
+                        message: "User is not a member of the specified organization".to_string(),
+                    }),
+                )
+            })?;
 
         let (org_id, org_name, org_desc, roles) = org_data;
 
@@ -137,7 +140,10 @@ pub async fn login(
             },
         };
 
-        return Ok((StatusCode::OK, Json(serde_json::to_value(response).unwrap())));
+        return Ok((
+            StatusCode::OK,
+            Json(serde_json::to_value(response).unwrap()),
+        ));
     }
 
     // No org_id provided - check how many orgs user belongs to
@@ -169,7 +175,10 @@ pub async fn login(
             },
         };
 
-        return Ok((StatusCode::OK, Json(serde_json::to_value(response).unwrap())));
+        return Ok((
+            StatusCode::OK,
+            Json(serde_json::to_value(response).unwrap()),
+        ));
     }
 
     // Multiple organizations - return org selection response
@@ -192,7 +201,10 @@ pub async fn login(
         follow_on_token,
     };
 
-    Ok((StatusCode::OK, Json(serde_json::to_value(response).unwrap())))
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::to_value(response).unwrap()),
+    ))
 }
 
 /// Select organization endpoint for multi-org users
@@ -217,29 +229,31 @@ pub async fn select_org(
     // Validate follow-on token
     let claims = token_manager
         .validate_follow_on_token(&req.follow_on_token)
-        .map_err(|_| (
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "invalid_token".to_string(),
-                message: "Invalid or expired follow-on token".to_string(),
-            }),
-        ))?;
+        .map_err(|_| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    error: "invalid_token".to_string(),
+                    message: "Invalid or expired follow-on token".to_string(),
+                }),
+            )
+        })?;
 
     // Get user info
-    let user_row = sqlx::query_as::<_, (String,)>(
-        "SELECT name FROM users WHERE id = $1"
-    )
-    .bind(claims.sub)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(internal_error)?
-    .ok_or_else(|| (
-        StatusCode::UNAUTHORIZED,
-        Json(ErrorResponse {
-            error: "user_not_found".to_string(),
-            message: "User not found".to_string(),
-        }),
-    ))?;
+    let user_row = sqlx::query_as::<_, (String,)>("SELECT name FROM users WHERE id = $1")
+        .bind(claims.sub)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(internal_error)?
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    error: "user_not_found".to_string(),
+                    message: "User not found".to_string(),
+                }),
+            )
+        })?;
 
     let user_name = user_row.0;
 
@@ -248,26 +262,34 @@ pub async fn select_org(
         "SELECT o.name, o.description, uo.roles
          FROM organizations o
          INNER JOIN user_organizations uo ON o.id = uo.organization_id
-         WHERE uo.user_id = $1 AND o.id = $2"
+         WHERE uo.user_id = $1 AND o.id = $2",
     )
     .bind(claims.sub)
     .bind(req.organization_id)
     .fetch_optional(&state.pool)
     .await
     .map_err(internal_error)?
-    .ok_or_else(|| (
-        StatusCode::FORBIDDEN,
-        Json(ErrorResponse {
-            error: "not_member".to_string(),
-            message: "User is not a member of the specified organization".to_string(),
-        }),
-    ))?;
+    .ok_or_else(|| {
+        (
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                error: "not_member".to_string(),
+                message: "User is not a member of the specified organization".to_string(),
+            }),
+        )
+    })?;
 
     let (org_name, org_desc, roles) = org_data;
 
     // Generate final JWT token
     let token = token_manager
-        .generate_token(claims.sub, claims.identity.clone(), req.organization_id, roles.clone(), 24)
+        .generate_token(
+            claims.sub,
+            claims.identity.clone(),
+            req.organization_id,
+            roles.clone(),
+            24,
+        )
         .map_err(internal_error)?;
 
     let organization = Organization {
@@ -316,13 +338,15 @@ pub async fn get_me(
         .extensions()
         .get::<AuthContext>()
         .cloned()
-        .ok_or_else(|| (
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "unauthorized".to_string(),
-                message: "Authentication required".to_string(),
-            }),
-        ))?;
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    error: "unauthorized".to_string(),
+                    message: "Authentication required".to_string(),
+                }),
+            )
+        })?;
 
     // Check if authenticated
     if !auth_context.is_authenticated() {
@@ -336,38 +360,41 @@ pub async fn get_me(
     }
 
     // Get user info from database
-    let user_row = sqlx::query_as::<_, (String, String)>(
-        "SELECT name, identity FROM users WHERE id = $1"
-    )
-    .bind(auth_context.user_id)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(internal_error)?
-    .ok_or_else(|| (
-        StatusCode::NOT_FOUND,
-        Json(ErrorResponse {
-            error: "user_not_found".to_string(),
-            message: "User not found".to_string(),
-        }),
-    ))?;
+    let user_row =
+        sqlx::query_as::<_, (String, String)>("SELECT name, identity FROM users WHERE id = $1")
+            .bind(auth_context.user_id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(internal_error)?
+            .ok_or_else(|| {
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: "user_not_found".to_string(),
+                        message: "User not found".to_string(),
+                    }),
+                )
+            })?;
 
     let (user_name, user_identity) = user_row;
 
     // Get organization info
     let org_row = sqlx::query_as::<_, (String, Option<String>)>(
-        "SELECT name, description FROM organizations WHERE id = $1"
+        "SELECT name, description FROM organizations WHERE id = $1",
     )
     .bind(auth_context.organization_id)
     .fetch_optional(&state.pool)
     .await
     .map_err(internal_error)?
-    .ok_or_else(|| (
-        StatusCode::NOT_FOUND,
-        Json(ErrorResponse {
-            error: "organization_not_found".to_string(),
-            message: "Organization not found".to_string(),
-        }),
-    ))?;
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "organization_not_found".to_string(),
+                message: "Organization not found".to_string(),
+            }),
+        )
+    })?;
 
     let (org_name, org_desc) = org_row;
 

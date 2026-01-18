@@ -1,9 +1,6 @@
-use axum::{
-    routing::post,
-    Router,
-};
+use axum::{Router, routing::post};
 use leptos::*;
-use leptos_axum::{generate_route_list, LeptosRoutes};
+use leptos_axum::{LeptosRoutes, generate_route_list};
 use std::env;
 use tower_http::services::ServeDir;
 
@@ -13,13 +10,13 @@ async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"))
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
         )
         .init();
 
     // Get API base URL from environment
-    let api_base_url = env::var("API_BASE_URL")
-        .unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let api_base_url =
+        env::var("API_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
 
     tracing::info!("API base URL: {}", api_base_url);
 

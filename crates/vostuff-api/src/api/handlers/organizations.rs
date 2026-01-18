@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 use uuid::Uuid;
 
@@ -23,10 +23,12 @@ use crate::api::{
 pub async fn list_organizations(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<Organization>>, (StatusCode, Json<ErrorResponse>)> {
-    let organizations = sqlx::query_as::<_, Organization>("SELECT id, name, description, created_at, updated_at FROM organizations ORDER BY name")
-        .fetch_all(&state.pool)
-        .await
-        .map_err(internal_error)?;
+    let organizations = sqlx::query_as::<_, Organization>(
+        "SELECT id, name, description, created_at, updated_at FROM organizations ORDER BY name",
+    )
+    .fetch_all(&state.pool)
+    .await
+    .map_err(internal_error)?;
 
     Ok(Json(organizations))
 }
@@ -50,7 +52,7 @@ pub async fn get_organization(
     Path(org_id): Path<Uuid>,
 ) -> Result<Json<Organization>, (StatusCode, Json<ErrorResponse>)> {
     let organization = sqlx::query_as::<_, Organization>(
-        "SELECT id, name, description, created_at, updated_at FROM organizations WHERE id = $1"
+        "SELECT id, name, description, created_at, updated_at FROM organizations WHERE id = $1",
     )
     .bind(org_id)
     .fetch_optional(&state.pool)
@@ -87,7 +89,7 @@ pub async fn create_organization(
 ) -> Result<(StatusCode, Json<Organization>), (StatusCode, Json<ErrorResponse>)> {
     let organization = sqlx::query_as::<_, Organization>(
         "INSERT INTO organizations (name, description) VALUES ($1, $2)
-         RETURNING id, name, description, created_at, updated_at"
+         RETURNING id, name, description, created_at, updated_at",
     )
     .bind(&req.name)
     .bind(&req.description)
@@ -235,7 +237,7 @@ pub async fn list_organization_users(
          FROM users u
          INNER JOIN user_organizations uo ON u.id = uo.user_id
          WHERE uo.organization_id = $1
-         ORDER BY u.name"
+         ORDER BY u.name",
     )
     .bind(org_id)
     .fetch_all(&state.pool)
