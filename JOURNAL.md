@@ -1,5 +1,160 @@
 # VOStuff Project Journal
 
+## 2026-01-18 - Added Quick Start Section to README
+
+**Prompts:**
+1. "How do I run vostuff?"
+2. "What is alice's username and password to log in"
+3. "Logging in with that gives an invalid credentials errors"
+4. "Can you summarise the running steps above, including this step into the README"
+
+**Claude's Response:**
+
+Provided instructions for running vostuff (database, migrations, API server, web UI). When user reported login failures with Alice's credentials, identified that sample data needed to be loaded first (`cargo run --bin load-sample-data`).
+
+Added a **Quick Start** section to README.md with:
+- Numbered commands to get vostuff running (database, migrations, sample data, API, web UI)
+- Access URLs (Web UI at localhost:3001, Swagger at localhost:8080/swagger-ui)
+- Test credentials table showing Alice (alice@pepsi.com) and Bob (bob@coke.com) with password `secret123`
+
+---
+
+## 2025-12-29 - Comprehensive API Integration Test Suite
+
+**Prompts:**
+1. "Is there an API test suite yet?"
+2. "yes" (to creating a comprehensive test suite)
+3. "Can you update the journal"
+
+**Claude's Response:**
+
+**Created Comprehensive API Test Infrastructure:**
+
+1. **Test Infrastructure** (`crates/vostuff-api/tests/common/mod.rs`):
+   - `TestContext` struct with helper methods for making HTTP requests
+   - `TestFixture` struct with pre-configured test data (2 orgs, 3 users with different roles)
+   - Database cleanup before each test to ensure isolation
+   - Helper methods: `get()`, `post()`, `patch()`, `delete()` with optional authentication
+   - `TestResponse` with assertion helpers and JSON deserialization
+   - Automatic login helper that returns JWT tokens
+   - Reusable test data creation methods
+
+2. **Refactored Router Building** (`crates/vostuff-api/src/api/handlers/mod.rs`):
+   - Created `build_router()` function shared between main app and tests
+   - Extracted all route definitions from `api_server.rs` into reusable function
+   - Updated `api_server.rs` to use shared router builder
+   - Ensures tests use exact same routing as production
+
+3. **Authentication Test Suite** (`crates/vostuff-api/tests/auth_tests.rs`):
+   - 9 comprehensive tests covering:
+     - Single organization login with auto-selection
+     - Multi-organization login requiring org selection
+     - Login with explicit organization ID
+     - Invalid credentials rejection
+     - Organization selection after multi-org login
+     - New `/api/auth/me` endpoint (validates token, returns user info)
+     - Unauthenticated access rejection
+     - Invalid token rejection
+     - Correct organization context in responses
+   - **Result: 9/9 tests PASSING ✅**
+
+4. **Multi-Tenancy Isolation Test Suite** (`crates/vostuff-api/tests/multi_tenancy_tests.rs`):
+   - 7 tests ensuring organization data isolation:
+     - Users cannot access other organizations' items
+     - Users cannot access other organizations' locations
+     - Users cannot access other organizations' collections
+     - Users cannot access other organizations' tags
+     - Users cannot create items in other organizations
+     - Even ADMINs cannot access other organizations' data
+     - Users in the same organization CAN share data
+   - **Result: 1/7 tests passing - DISCOVERED CRITICAL SECURITY VULNERABILITIES ⚠️**
+
+5. **Items CRUD Test Suite** (`crates/vostuff-api/tests/items_tests.rs`):
+   - 8 tests covering:
+     - Create and retrieve book items
+     - Create vinyl items with type-specific details
+     - Update item properties
+     - Delete items
+     - List items with pagination
+     - Filter items by type
+     - Unauthenticated access rejection
+   - **Result: 4/8 tests passing - DISCOVERED FUNCTIONALITY BUGS ⚠️**
+
+**Fixed Model Serialization:**
+- Updated `crates/vostuff-core/src/models.rs` to add both `Serialize` and `Deserialize` to auth models:
+  - `LoginRequest`: Added `Serialize` (previously only `Deserialize`)
+  - `LoginResponse`: Added `Deserialize` (previously only `Serialize`)
+  - `OrgSelectionResponse`: Added `Deserialize` (previously only `Serialize`)
+  - `OrganizationWithRoles`: Added `Deserialize` (previously only `Serialize`)
+  - `SelectOrgRequest`: Added `Serialize` (previously only `Deserialize`)
+  - `UserInfo`: Added `Deserialize` (previously only `Serialize`)
+- This enables bidirectional serialization for testing and future API client use
+
+**Updated Documentation:**
+- Updated `README.md` Testing and Quality section with:
+  - Description of test coverage (authentication, multi-tenancy, CRUD)
+  - Commands for running all tests, specific test suites, and unit tests
+  - Note about database requirement and test isolation
+  - Recommendation to use `--test-threads=1` for proper database isolation
+
+**Critical Issues Discovered by Test Suite:**
+
+**SECURITY VULNERABILITIES (CRITICAL - MUST FIX):**
+1. **No Multi-Tenant Isolation**: Users can access and modify data from other organizations
+   - Users can list, read, create, and delete items in organizations they don't belong to
+   - Users can access locations, collections, and tags from other organizations
+   - This violates the fundamental multi-tenant architecture design
+   - **Impact**: Complete data breach - all organization data is accessible to any authenticated user
+
+2. **Missing Authentication Checks**: Some endpoints allow unauthenticated access
+   - Item creation succeeds without authentication (returns 201 instead of 401)
+   - **Impact**: Anonymous users could potentially create data
+
+**FUNCTIONALITY BUGS:**
+3. **Pagination Not Working**: The `limit` parameter is ignored
+   - Requesting 10 items with `?limit=10` returns all 15 items
+   - **Impact**: Performance issues with large datasets, API contract violation
+
+4. **Item Type Filtering Not Working**: The `item_type` query parameter doesn't filter
+   - Filtering by `?item_type=book` returns items of all types
+   - **Impact**: Clients cannot filter items, must filter client-side
+
+5. **Vinyl Details Not Returned**: Type-specific details missing from GET responses
+   - Creating vinyl with `vinyl_details` succeeds, but GET returns `vinyl_details: null`
+   - **Impact**: Critical data loss for vinyl records (grading, size, speed, etc.)
+
+**Technical Impact:**
+This comprehensive test suite establishes a foundation for Test-Driven Development and regression prevention. The integration tests use the actual HTTP layer through Axum's test utilities, ensuring they test the full request/response cycle including middleware, routing, serialization, and database operations.
+
+Most importantly, the test suite immediately proved its value by discovering critical security vulnerabilities that would have allowed complete cross-organization data access in production. The multi-tenancy isolation tests revealed that the authorization middleware is not checking organization membership before allowing data access - a fundamental flaw in a multi-tenant system.
+
+The authentication tests all pass, confirming that the authentication refactoring from earlier today (separating JWT validation to the API server via `/api/auth/me`) works correctly.
+
+**Test Statistics:**
+- **Total Tests**: 24 integration tests + existing unit tests
+- **Passing**: 14 (58%)
+- **Failing**: 10 (42%)
+- **Coverage Areas**: Authentication (100% pass), Multi-tenancy (14% pass), Items CRUD (50% pass)
+
+**Next Steps (Recommended):**
+1. **URGENT**: Fix multi-tenant isolation by adding organization membership checks in all handlers
+2. **HIGH**: Fix unauthenticated access by ensuring all protected endpoints check authentication
+3. **MEDIUM**: Fix pagination implementation to respect limit/offset parameters
+4. **MEDIUM**: Fix item type filtering in list endpoints
+5. **MEDIUM**: Include type-specific details (vinyl_details, cd_details, etc.) in item responses
+
+**Files Created:**
+- `crates/vostuff-api/tests/common/mod.rs` - Test infrastructure and utilities
+- `crates/vostuff-api/tests/auth_tests.rs` - Authentication test suite (9 tests)
+- `crates/vostuff-api/tests/multi_tenancy_tests.rs` - Multi-tenancy isolation tests (7 tests)
+- `crates/vostuff-api/tests/items_tests.rs` - Items CRUD tests (8 tests)
+
+**Files Modified:**
+- `crates/vostuff-api/src/api/handlers/mod.rs` - Added shared `build_router()` function
+- `crates/vostuff-api/src/bin/api_server.rs` - Updated to use shared router builder
+- `crates/vostuff-core/src/models.rs` - Added Serialize/Deserialize to auth models
+- `README.md` - Updated Testing and Quality section with comprehensive test documentation
+
 ## 2025-12-29 - Authentication Architecture Refactoring: JWT Validation Separation
 
 **Prompts:**

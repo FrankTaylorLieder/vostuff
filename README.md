@@ -48,6 +48,37 @@ A three-tier Rust application for tracking collections of stuff - vinyl records,
 - cargo-leptos (for running the web UI): `cargo install cargo-leptos`
 - sqlx-cli (for database tooling): `cargo install sqlx-cli --no-default-features --features postgres`
 
+## Quick Start
+
+Run these commands to get vostuff up and running:
+
+```bash
+# 1. Start the database
+docker-compose -f docker-compose-dev.yml up -d
+
+# 2. Run database migrations (use SQLX_OFFLINE=true on first run)
+SQLX_OFFLINE=true DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev cargo run --bin schema-manager migrate
+
+# 3. Load sample data (creates test users and items)
+DATABASE_URL=postgresql://vostuff:vostuff_dev_password@localhost:5432/vostuff_dev cargo run --bin load-sample-data
+
+# 4. Start the API server (in one terminal)
+cargo run --bin api-server
+
+# 5. Start the web UI (in another terminal)
+cargo leptos watch
+```
+
+**Access the application:**
+- Web UI: http://localhost:3001
+- Swagger UI: http://localhost:8080/swagger-ui
+
+**Test credentials (after loading sample data):**
+| User  | Email            | Password    | Organization | Role        |
+|-------|------------------|-------------|--------------|-------------|
+| Alice | alice@pepsi.com  | secret123   | Pepsi        | USER, ADMIN |
+| Bob   | bob@coke.com     | secret123   | Coke         | USER        |
+
 ## Getting Started
 
 ### 1. Clone the Repository
