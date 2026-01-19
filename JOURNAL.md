@@ -4,6 +4,10 @@
 
 **Prompts:**
 1. "Can you implement simple item filtering: by type, state and location. Following the layout description in the functional description."
+2. "Error seen when using the filters: Error loading data: error deserializing server function arguments: missing field `item_types`"
+3. "Now the filters don't change the content of the table below. They are not filtering the content."
+4. "This is working now."
+5. "Can you add a clear button to the filters to clear them all in one go."
 
 **Claude's Response:**
 
@@ -40,6 +44,7 @@ Implemented item filtering functionality for the items table view, allowing user
   - Integrated `FilterBar` with three `FilterDropdown` components
   - Filters automatically reset page to 1 when changed
   - Shows contextual empty state message based on active filters
+  - Added "Clear Filters" button that appears when any filters are active
 
 - `crates/vostuff-web/style/main.css`:
   - `.filter-bar` - Horizontal container for filter dropdowns
@@ -48,6 +53,7 @@ Implemented item filtering functionality for the items table view, allowing user
   - `.filter-option` - Checkbox option styling
   - `.filter-action-btn` - Select All/Clear buttons
   - `.filter-done-btn` - Done button to close dropdown
+  - `.filter-clear-btn` - Clear all filters button (right-aligned)
 
 **Technical Details:**
 - Filters use `store_value()` to avoid closure ownership issues in Leptos
