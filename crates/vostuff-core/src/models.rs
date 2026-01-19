@@ -375,3 +375,20 @@ pub struct PaginatedResponse<T> {
     pub per_page: i64,
     pub total_pages: i64,
 }
+
+// Item filter parameters
+#[derive(Debug, Default, Deserialize)]
+#[cfg_attr(feature = "server", derive(ToSchema))]
+#[cfg_attr(feature = "server", derive(utoipa::IntoParams))]
+pub struct ItemFilterParams {
+    #[serde(default = "default_page")]
+    pub page: i64,
+    #[serde(default = "default_per_page")]
+    pub per_page: i64,
+    /// Filter by item types (comma-separated, e.g., "vinyl,cd,book")
+    pub item_type: Option<String>,
+    /// Filter by item states (comma-separated, e.g., "current,loaned")
+    pub state: Option<String>,
+    /// Filter by location IDs (comma-separated UUIDs)
+    pub location_id: Option<String>,
+}

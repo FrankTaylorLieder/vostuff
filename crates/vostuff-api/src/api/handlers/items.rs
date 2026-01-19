@@ -8,19 +8,19 @@ use uuid::Uuid;
 
 use crate::api::{
     models::{
-        CreateItemRequest, ErrorResponse, Item, ItemState, ItemType, PaginatedResponse,
-        PaginationParams, UpdateItemRequest,
+        CreateItemRequest, ErrorResponse, Item, ItemFilterParams, ItemState, ItemType,
+        PaginatedResponse, UpdateItemRequest,
     },
     state::AppState,
 };
 
-/// List all items for an organization
+/// List all items for an organization with optional filters
 #[utoipa::path(
     get,
     path = "/api/organizations/{org_id}/items",
     params(
         ("org_id" = Uuid, Path, description = "Organization ID"),
-        PaginationParams
+        ItemFilterParams
     ),
     responses(
         (status = 200, description = "List of items", body = PaginatedResponse<Item>),
@@ -31,42 +31,135 @@ use crate::api::{
 pub async fn list_items(
     State(state): State<AppState>,
     Path(org_id): Path<Uuid>,
-    Query(pagination): Query<PaginationParams>,
+    Query(filters): Query<ItemFilterParams>,
 ) -> Result<Json<PaginatedResponse<Item>>, (StatusCode, Json<ErrorResponse>)> {
-    let offset = (pagination.page - 1) * pagination.per_page;
+    tracing::debug!(
+        "list_items called with filters: item_type={:?}, state={:?}, location_id={:?}",
+        filters.item_type,
+        filters.state,
+        filters.location_id
+    );
 
-    // Get total count
-    let total_result =
-        sqlx::query("SELECT COUNT(*) as count FROM items WHERE organization_id = $1")
-            .bind(org_id)
-            .fetch_one(&state.pool)
-            .await
-            .map_err(internal_error)?;
+    let offset = (filters.page - 1) * filters.per_page;
 
+    // Parse filter values
+    let item_types: Vec<String> = filters
+        .item_type
+        .as_ref()
+        .map(|s| s.split(',').map(|t| t.trim().to_string()).collect())
+        .unwrap_or_default();
+
+    let states: Vec<String> = filters
+        .state
+        .as_ref()
+        .map(|s| s.split(',').map(|t| t.trim().to_string()).collect())
+        .unwrap_or_default();
+
+    let location_ids: Vec<Uuid> = filters
+        .location_id
+        .as_ref()
+        .map(|s| {
+            s.split(',')
+                .filter_map(|t| Uuid::parse_str(t.trim()).ok())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Build dynamic WHERE clause
+    let mut where_clauses = vec!["organization_id = $1".to_string()];
+    let mut param_idx = 2;
+
+    if !item_types.is_empty() {
+        let placeholders: Vec<String> = item_types
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("${}", param_idx + i))
+            .collect();
+        where_clauses.push(format!("item_type::text IN ({})", placeholders.join(", ")));
+        param_idx += item_types.len();
+    }
+
+    if !states.is_empty() {
+        let placeholders: Vec<String> = states
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("${}", param_idx + i))
+            .collect();
+        where_clauses.push(format!("state::text IN ({})", placeholders.join(", ")));
+        param_idx += states.len();
+    }
+
+    if !location_ids.is_empty() {
+        let placeholders: Vec<String> = location_ids
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("${}", param_idx + i))
+            .collect();
+        where_clauses.push(format!("location_id IN ({})", placeholders.join(", ")));
+        param_idx += location_ids.len();
+    }
+
+    let where_clause = where_clauses.join(" AND ");
+
+    // Build count query
+    let count_query = format!("SELECT COUNT(*) as count FROM items WHERE {}", where_clause);
+    let mut count_builder = sqlx::query(&count_query).bind(org_id);
+    for t in &item_types {
+        count_builder = count_builder.bind(t);
+    }
+    for s in &states {
+        count_builder = count_builder.bind(s);
+    }
+    for loc in &location_ids {
+        count_builder = count_builder.bind(loc);
+    }
+
+    let total_result = count_builder
+        .fetch_one(&state.pool)
+        .await
+        .map_err(internal_error)?;
     let total: i64 = total_result.get("count");
 
-    // Get items
-    let items = sqlx::query_as::<_, ItemRow>(
+    // Build items query
+    let items_query = format!(
         "SELECT id, organization_id, item_type::text, state::text, name, description, notes,
          location_id, date_entered, date_acquired, created_at, updated_at
-         FROM items WHERE organization_id = $1
-         ORDER BY created_at DESC LIMIT $2 OFFSET $3",
-    )
-    .bind(org_id)
-    .bind(pagination.per_page)
-    .bind(offset)
-    .fetch_all(&state.pool)
-    .await
-    .map_err(internal_error)?;
+         FROM items WHERE {}
+         ORDER BY created_at DESC LIMIT ${} OFFSET ${}",
+        where_clause,
+        param_idx,
+        param_idx + 1
+    );
+
+    let mut items_builder = sqlx::query_as::<_, ItemRow>(&items_query).bind(org_id);
+    for t in &item_types {
+        items_builder = items_builder.bind(t);
+    }
+    for s in &states {
+        items_builder = items_builder.bind(s);
+    }
+    for loc in &location_ids {
+        items_builder = items_builder.bind(loc);
+    }
+    items_builder = items_builder.bind(filters.per_page).bind(offset);
+
+    let items = items_builder
+        .fetch_all(&state.pool)
+        .await
+        .map_err(internal_error)?;
 
     let items: Vec<Item> = items.into_iter().map(|row| row.into()).collect();
-    let total_pages = (total + pagination.per_page - 1) / pagination.per_page;
+    let total_pages = if total == 0 {
+        1
+    } else {
+        (total + filters.per_page - 1) / filters.per_page
+    };
 
     Ok(Json(PaginatedResponse {
         items,
         total,
-        page: pagination.page,
-        per_page: pagination.per_page,
+        page: filters.page,
+        per_page: filters.per_page,
         total_pages,
     }))
 }

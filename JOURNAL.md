@@ -1,5 +1,75 @@
 # VOStuff Project Journal
 
+## 2026-01-19 - Item Filtering by Type, State, and Location
+
+**Prompts:**
+1. "Can you implement simple item filtering: by type, state and location. Following the layout description in the functional description."
+
+**Claude's Response:**
+
+Implemented item filtering functionality for the items table view, allowing users to filter by type, state, and location using multi-select dropdown filters.
+
+**API Changes:**
+- `crates/vostuff-core/src/models.rs` - Added `ItemFilterParams` struct with:
+  - Pagination fields (page, per_page)
+  - `item_type` - Comma-separated filter for item types
+  - `state` - Comma-separated filter for item states
+  - `location_id` - Comma-separated UUIDs for location filter
+
+- `crates/vostuff-api/src/api/handlers/items.rs` - Updated `list_items` handler:
+  - Now accepts `ItemFilterParams` instead of `PaginationParams`
+  - Builds dynamic SQL WHERE clause based on active filters
+  - Uses parameterized queries to prevent SQL injection
+  - Filters work with any combination (type only, state only, multiple filters)
+
+**Web Changes:**
+- `crates/vostuff-web/src/server_fns/items.rs`:
+  - Added `ItemFilters` struct for passing filter values to API
+  - Updated `get_items()` to accept optional filters
+  - Added `api_value()` and `all()` methods to `ItemType` and `ItemState`
+
+- `crates/vostuff-web/src/components/filter_dropdown.rs` (new):
+  - `FilterOption` struct for dropdown options
+  - `FilterDropdown` component with multi-select functionality
+  - "Select All" and "Clear" buttons
+  - Shows selected count in button text
+  - `FilterBar` container component
+
+- `crates/vostuff-web/src/pages/home.rs`:
+  - Added filter state signals for types, states, and locations
+  - Integrated `FilterBar` with three `FilterDropdown` components
+  - Filters automatically reset page to 1 when changed
+  - Shows contextual empty state message based on active filters
+
+- `crates/vostuff-web/style/main.css`:
+  - `.filter-bar` - Horizontal container for filter dropdowns
+  - `.filter-dropdown` - Dropdown button and menu styling
+  - `.filter-dropdown-btn.active` - Highlighted when filters active
+  - `.filter-option` - Checkbox option styling
+  - `.filter-action-btn` - Select All/Clear buttons
+  - `.filter-done-btn` - Done button to close dropdown
+
+**Technical Details:**
+- Filters use `store_value()` to avoid closure ownership issues in Leptos
+- Filter state stored as `HashSet<String>` for efficient membership checks
+- Location filter passes UUIDs as strings, parsed on the server
+- API builds dynamic queries with proper parameter binding
+- Empty filter selections show all items (no filter applied)
+
+**Build Results:**
+- All code compiles successfully
+- Clippy passes with no new warnings (pre-existing warnings only)
+- Web package tests pass
+
+**Bug Fixes During Implementation:**
+1. Added `#[serde(default)]` to `ItemFilters` struct to fix deserialization error when filters were empty
+2. Fixed Leptos resource not refetching when filters changed:
+   - Changed from using `build_filters()` closure inside fetcher to using values directly from source tuple
+   - Converted HashSets to sorted Vecs in resource source for stable equality comparison
+   - This ensures Leptos properly detects when filter values change and triggers a refetch
+
+---
+
 ## 2026-01-18 - Main Items Table View Implementation
 
 **Prompts:**

@@ -1,12 +1,13 @@
 use leptos::*;
 use leptos_router::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
+use crate::components::filter_dropdown::{FilterBar, FilterDropdown, FilterOption};
 use crate::components::header::Header;
 use crate::components::items_table::ItemsTable;
 use crate::components::pagination::Pagination;
 use crate::server_fns::auth::{UserInfo, get_current_user};
-use crate::server_fns::items::{get_items, get_locations};
+use crate::server_fns::items::{ItemFilters, ItemState, ItemType, get_items, get_locations};
 
 #[component]
 pub fn HomePage() -> impl IntoView {
@@ -37,8 +38,24 @@ pub fn HomePage() -> impl IntoView {
 #[component]
 fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
     let org_id = user_info.organization.id;
+
+    // Pagination state
     let (page, set_page) = create_signal(1i64);
     let (per_page, set_per_page) = create_signal(25i64);
+
+    // Filter state
+    let (selected_types, set_selected_types) = create_signal::<HashSet<String>>(HashSet::new());
+    let (selected_states, set_selected_states) = create_signal::<HashSet<String>>(HashSet::new());
+    let (selected_locations, set_selected_locations) =
+        create_signal::<HashSet<String>>(HashSet::new());
+
+    // Reset to page 1 when filters change
+    create_effect(move |_| {
+        let _ = selected_types.get();
+        let _ = selected_states.get();
+        let _ = selected_locations.get();
+        set_page.set(1);
+    });
 
     // Fetch locations once (they don't paginate)
     let locations_resource = create_resource(
@@ -46,10 +63,59 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
         |org_id| async move { get_locations(org_id).await },
     );
 
-    // Fetch items with pagination
+    // Fetch items with pagination and filters
+    // Convert HashSets to sorted Vecs for stable comparison in resource source
     let items_resource = create_resource(
-        move || (org_id, page.get(), per_page.get()),
-        |(org_id, page, per_page)| async move { get_items(org_id, page, per_page).await },
+        move || {
+            let mut types: Vec<String> = selected_types.get().into_iter().collect();
+            types.sort();
+            let mut states: Vec<String> = selected_states.get().into_iter().collect();
+            states.sort();
+            let mut locations: Vec<String> = selected_locations.get().into_iter().collect();
+            locations.sort();
+            (org_id, page.get(), per_page.get(), types, states, locations)
+        },
+        move |(org_id, page, per_page, types, states, locations)| {
+            // Build filters from the source values
+            let location_ids: Vec<uuid::Uuid> = locations
+                .iter()
+                .filter_map(|s| uuid::Uuid::parse_str(s).ok())
+                .collect();
+
+            let filters = if types.is_empty() && states.is_empty() && location_ids.is_empty() {
+                None
+            } else {
+                Some(ItemFilters {
+                    item_types: types,
+                    states,
+                    location_ids,
+                })
+            };
+
+            async move { get_items(org_id, page, per_page, filters).await }
+        },
+    );
+
+    // Build filter options for types (stored for reuse in reactive context)
+    let type_options = store_value(
+        ItemType::all()
+            .into_iter()
+            .map(|t| FilterOption {
+                value: t.api_value().to_string(),
+                label: t.display_name().to_string(),
+            })
+            .collect::<Vec<_>>(),
+    );
+
+    // Build filter options for states (stored for reuse in reactive context)
+    let state_options = store_value(
+        ItemState::all()
+            .into_iter()
+            .map(|s| FilterOption {
+                value: s.api_value().to_string(),
+                label: s.display_name().to_string(),
+            })
+            .collect::<Vec<_>>(),
     );
 
     view! {
@@ -62,45 +128,88 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                 <h1>"Items"</h1>
 
                 <Suspense fallback=move || {
-                    view! { <div class="loading">"Loading items..."</div> }
+                    view! { <div class="loading">"Loading..."</div> }
                 }>
                     {move || {
                         let locations_result = locations_resource.get();
                         let items_result = items_resource.get();
                         match (locations_result, items_result) {
                             (Some(Ok(locations)), Some(Ok(paginated))) => {
+                                // Build location map for table display
                                 let location_map: HashMap<uuid::Uuid, String> = locations
                                     .iter()
                                     .map(|loc| (loc.id, loc.name.clone()))
                                     .collect();
-                                if paginated.items.is_empty() {
-                                    view! {
-                                        <div class="empty-state">
-                                            <h3>"No items found"</h3>
-                                            <p>"Start by adding your first item to this organization."</p>
-                                        </div>
-                                    }
-                                        .into_view()
-                                } else {
-                                    view! {
-                                        <ItemsTable items=paginated.items.clone() locations=location_map/>
-                                        <Pagination
-                                            current_page=page
-                                            total_pages=paginated.total_pages
-                                            total_items=paginated.total
-                                            per_page=per_page
-                                            set_page=set_page
-                                            set_per_page=set_per_page
+                                // Build location options for filter
+                                let location_options: Vec<FilterOption> = locations
+                                    .iter()
+                                    .map(|loc| FilterOption {
+                                        value: loc.id.to_string(),
+                                        label: loc.name.clone(),
+                                    })
+                                    .collect();
+                                let has_filters = !selected_types.get().is_empty()
+                                    || !selected_states.get().is_empty()
+                                    || !selected_locations.get().is_empty();
+                                view! {
+                                    <FilterBar>
+                                        <FilterDropdown
+                                            label="Type"
+                                            options=type_options.get_value()
+                                            selected=selected_types
+                                            set_selected=set_selected_types
                                         />
-                                    }
-                                        .into_view()
+                                        <FilterDropdown
+                                            label="State"
+                                            options=state_options.get_value()
+                                            selected=selected_states
+                                            set_selected=set_selected_states
+                                        />
+                                        <FilterDropdown
+                                            label="Location"
+                                            options=location_options
+                                            selected=selected_locations
+                                            set_selected=set_selected_locations
+                                        />
+                                    </FilterBar>
+
+                                    {if paginated.items.is_empty() {
+                                        view! {
+                                            <div class="empty-state">
+                                                <h3>"No items found"</h3>
+                                                <p>
+                                                    {if has_filters {
+                                                        "No items match the current filters. Try adjusting your filter criteria."
+                                                    } else {
+                                                        "Start by adding your first item to this organization."
+                                                    }}
+                                                </p>
+                                            </div>
+                                        }
+                                            .into_view()
+                                    } else {
+                                        view! {
+                                            <ItemsTable
+                                                items=paginated.items.clone()
+                                                locations=location_map
+                                            />
+                                            <Pagination
+                                                current_page=page
+                                                total_pages=paginated.total_pages
+                                                total_items=paginated.total
+                                                per_page=per_page
+                                                set_page=set_page
+                                                set_per_page=set_per_page
+                                            />
+                                        }
+                                            .into_view()
+                                    }}
                                 }
+                                    .into_view()
                             }
                             (Some(Err(e)), _) | (_, Some(Err(e))) => {
                                 view! {
-                                    <div class="error">
-                                        {format!("Error loading data: {}", e)}
-                                    </div>
+                                    <div class="error">{format!("Error loading data: {}", e)}</div>
                                 }
                                     .into_view()
                             }

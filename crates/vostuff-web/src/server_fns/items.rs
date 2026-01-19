@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 // Types matching the API response
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum ItemType {
     Vinyl,
@@ -29,9 +29,33 @@ impl ItemType {
             ItemType::Misc => "Misc",
         }
     }
+
+    pub fn api_value(&self) -> &'static str {
+        match self {
+            ItemType::Vinyl => "vinyl",
+            ItemType::Cd => "cd",
+            ItemType::Cassette => "cassette",
+            ItemType::Book => "book",
+            ItemType::Score => "score",
+            ItemType::Electronics => "electronics",
+            ItemType::Misc => "misc",
+        }
+    }
+
+    pub fn all() -> Vec<ItemType> {
+        vec![
+            ItemType::Vinyl,
+            ItemType::Cd,
+            ItemType::Cassette,
+            ItemType::Book,
+            ItemType::Score,
+            ItemType::Electronics,
+            ItemType::Misc,
+        ]
+    }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum ItemState {
     Current,
@@ -57,6 +81,24 @@ impl ItemState {
             ItemState::Missing => "state-missing",
             ItemState::Disposed => "state-disposed",
         }
+    }
+
+    pub fn api_value(&self) -> &'static str {
+        match self {
+            ItemState::Current => "current",
+            ItemState::Loaned => "loaned",
+            ItemState::Missing => "missing",
+            ItemState::Disposed => "disposed",
+        }
+    }
+
+    pub fn all() -> Vec<ItemState> {
+        vec![
+            ItemState::Current,
+            ItemState::Loaned,
+            ItemState::Missing,
+            ItemState::Disposed,
+        ]
     }
 }
 
@@ -117,24 +159,56 @@ async fn get_auth_token() -> Result<String, ServerFnError<NoCustomError>> {
         .ok_or_else(|| ServerFnError::<NoCustomError>::ServerError("Not authenticated".to_string()))
 }
 
-/// Fetch paginated items for an organization
+/// Filter parameters for items query
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ItemFilters {
+    pub item_types: Vec<String>,
+    pub states: Vec<String>,
+    pub location_ids: Vec<Uuid>,
+}
+
+/// Fetch paginated items for an organization with optional filters
 #[server(GetItems, "/api")]
 pub async fn get_items(
     org_id: Uuid,
     page: i64,
     per_page: i64,
+    filters: Option<ItemFilters>,
 ) -> Result<PaginatedResponse<Item>, ServerFnError<NoCustomError>> {
     let token = get_auth_token().await?;
 
     let api_base_url =
         std::env::var("API_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
 
+    // Build query string with filters
+    let mut url = format!(
+        "{}/api/organizations/{}/items?page={}&per_page={}",
+        api_base_url, org_id, page, per_page
+    );
+
+    if let Some(ref f) = filters {
+        if !f.item_types.is_empty() {
+            url.push_str(&format!("&item_type={}", f.item_types.join(",")));
+        }
+        if !f.states.is_empty() {
+            url.push_str(&format!("&state={}", f.states.join(",")));
+        }
+        if !f.location_ids.is_empty() {
+            let loc_str: Vec<String> = f.location_ids.iter().map(|id| id.to_string()).collect();
+            url.push_str(&format!("&location_id={}", loc_str.join(",")));
+        }
+    }
+
+    tracing::debug!(
+        "get_items requesting URL: {} with filters: {:?}",
+        url,
+        filters
+    );
+
     let client = reqwest::Client::new();
     let response = client
-        .get(format!(
-            "{}/api/organizations/{}/items?page={}&per_page={}",
-            api_base_url, org_id, page, per_page
-        ))
+        .get(&url)
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .await
