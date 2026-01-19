@@ -569,3 +569,22 @@ body {
 .filter-done-btn:hover {
   background: #357ABD;
 }
+
+/* Clear Filters Button */
+.filter-clear-btn {
+  padding: 10px 16px;
+  background: transparent;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: auto;
+}
+
+.filter-clear-btn:hover {
+  background: #f8f9fa;
+  border-color: #b0b0b0;
+  color: #333;
+}

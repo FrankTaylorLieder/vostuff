@@ -171,6 +171,18 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                                             selected=selected_locations
                                             set_selected=set_selected_locations
                                         />
+                                        <Show when=move || has_filters fallback=|| ()>
+                                            <button
+                                                class="filter-clear-btn"
+                                                on:click=move |_| {
+                                                    set_selected_types.set(std::collections::HashSet::new());
+                                                    set_selected_states.set(std::collections::HashSet::new());
+                                                    set_selected_locations.set(std::collections::HashSet::new());
+                                                }
+                                            >
+                                                "Clear Filters"
+                                            </button>
+                                        </Show>
                                     </FilterBar>
 
                                     {if paginated.items.is_empty() {
