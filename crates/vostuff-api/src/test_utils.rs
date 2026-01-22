@@ -234,6 +234,10 @@ impl<'a> SampleDataLoader<'a> {
         self.create_misc_items(org_id, locations, collections)
             .await?;
 
+        // DVDs (6 items)
+        self.create_dvd_items(org_id, locations, collections)
+            .await?;
+
         Ok(())
     }
 
@@ -718,6 +722,61 @@ impl<'a> SampleDataLoader<'a> {
         }
 
         println!("  ✓ Created 4 misc items");
+        Ok(())
+    }
+
+    async fn create_dvd_items(
+        &self,
+        org_id: Uuid,
+        locations: &[Uuid],
+        _collections: &[Uuid],
+    ) -> Result<()> {
+        let dvd_data = vec![
+            (
+                "The Lord of the Rings: The Fellowship of the Ring",
+                2,
+                "current",
+            ),
+            ("The Matrix", 1, "current"),
+            ("Inception", 1, "current"),
+            ("The Dark Knight", 2, "loaned"),
+            ("Pulp Fiction", 1, "current"),
+            ("The Godfather", 1, "current"),
+        ];
+
+        for (idx, (name, disks, state)) in dvd_data.iter().enumerate() {
+            let location_id = locations[idx % locations.len()];
+            let item_id = self
+                .create_item(
+                    org_id,
+                    "dvd",
+                    state,
+                    name,
+                    &format!("DVD: {}", name),
+                    location_id,
+                )
+                .await?;
+
+            sqlx::query!(
+                "INSERT INTO dvd_details (item_id, disks) VALUES ($1, $2)",
+                item_id,
+                *disks
+            )
+            .execute(self.pool)
+            .await?;
+
+            if *state == "loaned" {
+                sqlx::query!(
+                    "INSERT INTO item_loan_details (item_id, date_loaned, date_due_back, loaned_to) VALUES ($1, CURRENT_DATE - INTERVAL '3 days', CURRENT_DATE + INTERVAL '11 days', $2)",
+                    item_id,
+                    "Movie Buff Friend"
+                )
+                .execute(self.pool)
+                .await?;
+            }
+        }
+
+        println!("  ✓ Created 6 DVD items");
         Ok(())
     }
 

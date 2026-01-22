@@ -17,6 +17,7 @@ pub enum ItemType {
     Score,
     Electronics,
     Misc,
+    Dvd,
 }
 
 // Item states

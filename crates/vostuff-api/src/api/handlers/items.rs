@@ -427,6 +427,7 @@ fn db_to_item_type(s: &str) -> ItemType {
         "score" => ItemType::Score,
         "electronics" => ItemType::Electronics,
         "misc" => ItemType::Misc,
+        "dvd" => ItemType::Dvd,
         _ => ItemType::Misc,
     }
 }
@@ -440,6 +441,7 @@ fn item_type_to_db(t: &ItemType) -> String {
         ItemType::Score => "score".to_string(),
         ItemType::Electronics => "electronics".to_string(),
         ItemType::Misc => "misc".to_string(),
+        ItemType::Dvd => "dvd".to_string(),
     }
 }
 

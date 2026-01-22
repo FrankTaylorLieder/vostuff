@@ -1,5 +1,64 @@
 # VOStuff Project Journal
 
+## 2026-01-22 - Add DVD Item Type
+
+**Prompts:**
+1. "Implement the following plan: # Plan: Add DVD Item Type..."
+
+**Claude's Response:**
+
+Implemented DVD as a new item type with a type-specific details table containing a "disks" field.
+
+**Database Changes:**
+- Created migration `migrations/20260122000000_add_dvd_type.sql`:
+  - Added 'dvd' to the `item_type` PostgreSQL enum
+  - Created `dvd_details` table (similar to `cd_details`) with:
+    - `item_id UUID PRIMARY KEY` referencing items table
+    - `disks INTEGER` with check constraint (disks > 0)
+    - `created_at` and `updated_at` timestamps
+  - Added trigger for automatic `updated_at` updates
+
+**API Changes:**
+- `crates/vostuff-core/src/models.rs`:
+  - Added `Dvd` variant to `ItemType` enum
+
+- `crates/vostuff-api/src/api/handlers/items.rs`:
+  - Updated `db_to_item_type()`: Added `"dvd" => ItemType::Dvd`
+  - Updated `item_type_to_db()`: Added `ItemType::Dvd => "dvd".to_string()`
+
+**Web UI Changes:**
+- `crates/vostuff-web/src/server_fns/items.rs`:
+  - Added `Dvd` variant to frontend `ItemType` enum
+  - Updated `display_name()`: `ItemType::Dvd => "DVD"`
+  - Updated `api_value()`: `ItemType::Dvd => "dvd"`
+  - Updated `all()`: Included `ItemType::Dvd` in the list
+
+**Sample Data:**
+- `crates/vostuff-api/src/test_utils.rs`:
+  - Added `create_dvd_items()` method creating 6 sample DVDs:
+    - The Lord of the Rings: The Fellowship of the Ring (2 disks)
+    - The Matrix (1 disk)
+    - Inception (1 disk)
+    - The Dark Knight (2 disks, loaned state)
+    - Pulp Fiction (1 disk)
+    - The Godfather (1 disk)
+  - Added call to `create_dvd_items()` in `create_items_for_org()`
+
+**Build Results:**
+- Migration ran successfully
+- SQLx query metadata regenerated with `cargo sqlx prepare`
+- All code compiles successfully with `cargo build`
+- Clippy passes (existing warnings only, unrelated to DVD changes)
+- Test failures are pre-existing database concurrency issues (deadlocks, duplicate keys), not related to DVD implementation
+
+**Verification Steps:**
+1. Reset and reload sample data: `cargo run --bin schema-manager reset && cargo run --bin load-sample-data`
+2. Start API server and web UI
+3. Log in and verify "DVD" appears in Type filter dropdown
+4. Filter by DVD type to see the 6 sample DVD items
+
+---
+
 ## 2026-01-19 - Item Filtering by Type, State, and Location
 
 **Prompts:**

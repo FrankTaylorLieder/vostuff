@@ -15,6 +15,7 @@ pub enum ItemType {
     Score,
     Electronics,
     Misc,
+    Dvd,
 }
 
 impl ItemType {
@@ -27,6 +28,7 @@ impl ItemType {
             ItemType::Score => "Score",
             ItemType::Electronics => "Electronics",
             ItemType::Misc => "Misc",
+            ItemType::Dvd => "DVD",
         }
     }
 
@@ -39,6 +41,7 @@ impl ItemType {
             ItemType::Score => "score",
             ItemType::Electronics => "electronics",
             ItemType::Misc => "misc",
+            ItemType::Dvd => "dvd",
         }
     }
 
@@ -51,6 +54,7 @@ impl ItemType {
             ItemType::Score,
             ItemType::Electronics,
             ItemType::Misc,
+            ItemType::Dvd,
         ]
     }
 }
