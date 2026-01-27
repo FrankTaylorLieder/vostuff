@@ -133,13 +133,29 @@ pub async fn list_items(
         .map_err(internal_error)?;
     let total: i64 = total_result.get("count");
 
+    // Build ORDER BY clause from whitelisted values
+    let order_column = match filters.sort_by.as_deref() {
+        Some("name") => "name",
+        Some("item_type") => "item_type",
+        Some("state") => "state",
+        Some("location_id") => "location_id",
+        Some("created_at") => "created_at",
+        _ => "name",
+    };
+    let order_direction = match filters.sort_order.as_deref() {
+        Some("desc") => "DESC",
+        _ => "ASC",
+    };
+
     // Build items query
     let items_query = format!(
         "SELECT id, organization_id, item_type::text, state::text, name, description, notes,
          location_id, date_entered, date_acquired, created_at, updated_at
          FROM items WHERE {}
-         ORDER BY created_at DESC LIMIT ${} OFFSET ${}",
+         ORDER BY {} {} LIMIT ${} OFFSET ${}",
         where_clause,
+        order_column,
+        order_direction,
         param_idx,
         param_idx + 1
     );

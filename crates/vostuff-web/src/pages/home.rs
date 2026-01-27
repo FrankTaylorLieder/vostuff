@@ -53,6 +53,10 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
     let (search_input, set_search_input) = create_signal(String::new());
     let (search_text, set_search_text) = create_signal(String::new());
 
+    // Sort state
+    let (sort_by, set_sort_by) = create_signal("name".to_string());
+    let (sort_order, set_sort_order) = create_signal("asc".to_string());
+
     // Reset to page 1 when filters change
     create_effect(move |_| {
         let _ = selected_types.get();
@@ -79,6 +83,8 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
             let mut locations: Vec<String> = selected_locations.get().into_iter().collect();
             locations.sort();
             let search = search_text.get();
+            let sb = sort_by.get();
+            let so = sort_order.get();
             (
                 org_id,
                 page.get(),
@@ -87,9 +93,11 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                 states,
                 locations,
                 search,
+                sb,
+                so,
             )
         },
-        move |(org_id, page, per_page, types, states, locations, search)| {
+        move |(org_id, page, per_page, types, states, locations, search, sb, so)| {
             // Build filters from the source values
             let location_ids: Vec<uuid::Uuid> = locations
                 .iter()
@@ -102,10 +110,15 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                 Some(search)
             };
 
+            let sort_by_opt = Some(sb);
+            let sort_order_opt = Some(so);
+
             let filters = if types.is_empty()
                 && states.is_empty()
                 && location_ids.is_empty()
                 && search_query.is_none()
+                && sort_by_opt.as_deref() == Some("name")
+                && sort_order_opt.as_deref() == Some("asc")
             {
                 None
             } else {
@@ -114,6 +127,8 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                     states,
                     location_ids,
                     search_query,
+                    sort_by: sort_by_opt,
+                    sort_order: sort_order_opt,
                 })
             };
 
@@ -238,6 +253,10 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                                                 items=paginated.items.clone()
                                                 locations=location_map
                                                 search_query=search_text.get()
+                                                sort_by=sort_by.get()
+                                                sort_order=sort_order.get()
+                                                set_sort_by=set_sort_by
+                                                set_sort_order=set_sort_order
                                             />
                                             <Pagination
                                                 current_page=page

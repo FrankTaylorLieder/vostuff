@@ -394,4 +394,8 @@ pub struct ItemFilterParams {
     pub location_id: Option<String>,
     /// Text search across name, description, and notes (ILIKE)
     pub search: Option<String>,
+    /// Sort by column (name, item_type, state, location_id, created_at)
+    pub sort_by: Option<String>,
+    /// Sort direction (asc, desc)
+    pub sort_order: Option<String>,
 }

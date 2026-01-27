@@ -1,5 +1,19 @@
 # VOStuff Project Journal
 
+## 2026-01-27 - Column Sorting for Items Table
+
+**Prompts:**
+- Implement the following plan: Column Sorting for Items Table - Add clickable column headers to sort items by Type, Name, State, or Location. Default sort is by Name ascending. Sorting is server-side (SQL ORDER BY) so it works correctly with pagination.
+
+**Summary:**
+Added server-side column sorting to the items table across all three tiers:
+1. **vostuff-core/models.rs**: Added `sort_by` and `sort_order` fields to `ItemFilterParams`
+2. **vostuff-api/handlers/items.rs**: Built dynamic ORDER BY clause using whitelisted column names and directions (no user input interpolation), defaulting to `ORDER BY name ASC`
+3. **vostuff-web/server_fns/items.rs**: Added `sort_by` and `sort_order` to `ItemFilters` and appended them as query params to the API URL
+4. **vostuff-web/pages/home.rs**: Added sort state signals (`sort_by` defaulting to "name", `sort_order` defaulting to "asc"), included them in the resource source tuple, and passed as props to `ItemsTable`
+5. **vostuff-web/components/items_table.rs**: Added clickable column headers with sort direction arrows (▲/▼), toggling direction on re-click or switching to ascending on new column click
+6. **vostuff-web/style/main.css**: Added `.sortable-header` styles with cursor pointer and hover effect
+
 ## 2026-01-27 - Highlight Search Matches in Items Table
 
 **Prompts:**

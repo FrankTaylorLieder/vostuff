@@ -34,6 +34,10 @@ pub fn ItemsTable(
     items: Vec<Item>,
     locations: HashMap<Uuid, String>,
     #[prop(default = String::new())] search_query: String,
+    #[prop(default = "name".to_string())] sort_by: String,
+    #[prop(default = "asc".to_string())] sort_order: String,
+    #[prop(optional)] set_sort_by: Option<WriteSignal<String>>,
+    #[prop(optional)] set_sort_order: Option<WriteSignal<String>>,
 ) -> impl IntoView {
     let (expanded_row, set_expanded_row) = create_signal::<Option<Uuid>>(None);
 
@@ -47,14 +51,58 @@ pub fn ItemsTable(
         });
     };
 
+    let sort_by_clone = sort_by.clone();
+    let sort_order_clone = sort_order.clone();
+
+    let make_sort_handler = move |column: &'static str| {
+        let sb = sort_by_clone.clone();
+        let so = sort_order_clone.clone();
+        move |_: web_sys::MouseEvent| {
+            if let (Some(set_sb), Some(set_so)) = (set_sort_by, set_sort_order) {
+                if sb == column {
+                    set_so.set(if so == "asc" {
+                        "desc".to_string()
+                    } else {
+                        "asc".to_string()
+                    });
+                } else {
+                    set_sb.set(column.to_string());
+                    set_so.set("asc".to_string());
+                }
+            }
+        }
+    };
+
+    let sort_indicator = |column: &str| -> &'static str {
+        if sort_by == column {
+            if sort_order == "asc" {
+                " \u{25B2}"
+            } else {
+                " \u{25BC}"
+            }
+        } else {
+            ""
+        }
+    };
+
+    let on_type = make_sort_handler("item_type");
+    let on_name = make_sort_handler("name");
+    let on_state = make_sort_handler("state");
+    let on_location = make_sort_handler("location_id");
+
+    let ind_type = sort_indicator("item_type");
+    let ind_name = sort_indicator("name");
+    let ind_state = sort_indicator("state");
+    let ind_location = sort_indicator("location_id");
+
     view! {
         <table class="items-table">
             <thead>
                 <tr>
-                    <th class="col-type">"Type"</th>
-                    <th class="col-name">"Name"</th>
-                    <th class="col-state">"State"</th>
-                    <th class="col-location">"Location"</th>
+                    <th class="col-type sortable-header" on:click=on_type>{format!("Type{}", ind_type)}</th>
+                    <th class="col-name sortable-header" on:click=on_name>{format!("Name{}", ind_name)}</th>
+                    <th class="col-state sortable-header" on:click=on_state>{format!("State{}", ind_state)}</th>
+                    <th class="col-location sortable-header" on:click=on_location>{format!("Location{}", ind_location)}</th>
                 </tr>
             </thead>
             <tbody>

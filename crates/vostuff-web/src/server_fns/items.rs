@@ -171,6 +171,8 @@ pub struct ItemFilters {
     pub states: Vec<String>,
     pub location_ids: Vec<Uuid>,
     pub search_query: Option<String>,
+    pub sort_by: Option<String>,
+    pub sort_order: Option<String>,
 }
 
 /// Fetch paginated items for an organization with optional filters
@@ -216,6 +218,12 @@ pub async fn get_items(
                 })
                 .collect();
             url.push_str(&format!("&search={}", encoded));
+        }
+        if let Some(ref sb) = f.sort_by {
+            url.push_str(&format!("&sort_by={}", sb));
+        }
+        if let Some(ref so) = f.sort_order {
+            url.push_str(&format!("&sort_order={}", so));
         }
     }
 
