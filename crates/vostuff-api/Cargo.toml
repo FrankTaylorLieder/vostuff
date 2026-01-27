@@ -46,6 +46,13 @@ jsonwebtoken = { workspace = true }
 axum-extra = { workspace = true }
 headers = { workspace = true }
 
+# CSV import
+csv = "1.3"
+rpassword = "7"
+
+# HTTP client
+reqwest = { workspace = true }
+
 [[bin]]
 name = "schema-manager"
 path = "src/bin/schema_manager.rs"
@@ -57,3 +64,7 @@ path = "src/bin/load_sample_data.rs"
 [[bin]]
 name = "api-server"
 path = "src/bin/api_server.rs"
+
+[[bin]]
+name = "clz-importer"
+path = "src/bin/clz_importer.rs"

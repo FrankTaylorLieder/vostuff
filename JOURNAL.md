@@ -1,5 +1,69 @@
 # VOStuff Project Journal
 
+## 2026-01-22 - CLZ CSV Importer Tool
+
+**Prompts:**
+1. "Let's implement the CSV importer which is documented in docs/csv-import-plan.md. We'll make one change. The program should be called clz-importer as this type of CSV file has been exported from an application called CLZ."
+2. "Can you run the importer with the sample data. Logging in as alice@pepsi.com."
+3. (After restarting API server with DVD type support) "This works. Please updated the journal."
+
+**Claude's Response:**
+
+Implemented the CLZ CSV importer CLI tool for importing movies/DVDs from CLZ export files into vostuff via the REST API.
+
+**Files Created:**
+- `crates/vostuff-api/src/bin/clz_importer.rs` - Main CLI binary with:
+  - Clap-based argument parsing (username, password, org-id, api-url, dry-run, csv-file)
+  - Password handling: command-line arg → VOSTUFF_PASSWORD env var → interactive prompt
+  - CSV parsing with serde for CLZ export format
+  - Authentication via `/api/auth/login` with support for multi-org users
+  - Interactive organization selection when user belongs to multiple orgs
+  - Item creation via `/api/organizations/{org_id}/items`
+  - Dry-run mode for validation without creating items
+  - Progress reporting and import summary
+
+**Files Modified:**
+- `crates/vostuff-api/Cargo.toml`:
+  - Added `csv = "1.3"` and `rpassword = "7"` dependencies
+  - Added `reqwest` workspace dependency for HTTP client
+  - Added `[[bin]]` section for `clz-importer`
+
+**CSV Field Mapping:**
+- Title → item name
+- All entries → item_type = "dvd"
+- Added Date (e.g., "Nov 09, 2022") → date_acquired (parsed to NaiveDate)
+- Release Date, Genres, Runtime, Director, Format, Distributor → notes field (formatted as key-value pairs)
+
+**CLI Usage:**
+```
+clz-importer [OPTIONS] --username <USERNAME> <CSV_FILE>
+
+Options:
+  -u, --username <USERNAME>  User email for authentication
+  -p, --password <PASSWORD>  Password (optional, uses VOSTUFF_PASSWORD env var or interactive prompt)
+  -o, --org-id <ORG_ID>      Organization ID (optional, will prompt if user has multiple orgs)
+      --api-url <API_URL>    API base URL [default: http://localhost:8080]
+      --dry-run              Parse and validate without creating items
+  -h, --help                 Print help
+```
+
+**Verification:**
+- Successfully compiled and linked
+- Dry-run mode tested with sample CSV: 280 records parsed and validated successfully
+- Code passes clippy and fmt checks
+- Full import run: 280 records imported as alice@pepsi.com into Pepsi organization
+- Initial run failed because the running API server predated the DVD item type addition — restarting the API server resolved the issue
+- All 280 CLZ movie records successfully created as DVD items
+
+**Technical Details:**
+- Uses reqwest for HTTP client functionality
+- Parses CLZ date format ("MMM DD, YYYY") using chrono
+- Supports multi-org authentication flow with follow-on tokens
+- Skips records with empty titles
+- Reports import statistics (total, imported, skipped, failed)
+
+---
+
 ## 2026-01-22 - Add DVD Item Type
 
 **Prompts:**
