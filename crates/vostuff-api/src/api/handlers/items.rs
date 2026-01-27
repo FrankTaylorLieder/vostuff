@@ -34,10 +34,11 @@ pub async fn list_items(
     Query(filters): Query<ItemFilterParams>,
 ) -> Result<Json<PaginatedResponse<Item>>, (StatusCode, Json<ErrorResponse>)> {
     tracing::debug!(
-        "list_items called with filters: item_type={:?}, state={:?}, location_id={:?}",
+        "list_items called with filters: item_type={:?}, state={:?}, location_id={:?}, search={:?}",
         filters.item_type,
         filters.state,
-        filters.location_id
+        filters.location_id,
+        filters.search
     );
 
     let offset = (filters.page - 1) * filters.per_page;
@@ -99,6 +100,15 @@ pub async fn list_items(
         param_idx += location_ids.len();
     }
 
+    let search_pattern = filters.search.as_ref().map(|s| format!("%{}%", s));
+    if search_pattern.is_some() {
+        where_clauses.push(format!(
+            "(name ILIKE ${p} OR description ILIKE ${p} OR notes ILIKE ${p})",
+            p = param_idx
+        ));
+        param_idx += 1;
+    }
+
     let where_clause = where_clauses.join(" AND ");
 
     // Build count query
@@ -112,6 +122,9 @@ pub async fn list_items(
     }
     for loc in &location_ids {
         count_builder = count_builder.bind(loc);
+    }
+    if let Some(ref pattern) = search_pattern {
+        count_builder = count_builder.bind(pattern);
     }
 
     let total_result = count_builder
@@ -140,6 +153,9 @@ pub async fn list_items(
     }
     for loc in &location_ids {
         items_builder = items_builder.bind(loc);
+    }
+    if let Some(ref pattern) = search_pattern {
+        items_builder = items_builder.bind(pattern);
     }
     items_builder = items_builder.bind(filters.per_page).bind(offset);
 

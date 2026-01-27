@@ -2,7 +2,9 @@ use leptos::*;
 use leptos_router::*;
 use std::collections::{HashMap, HashSet};
 
-use crate::components::filter_dropdown::{FilterBar, FilterDropdown, FilterOption};
+use crate::components::filter_dropdown::{
+    FilterBar, FilterDropdown, FilterOption, FilterSearchInput,
+};
 use crate::components::header::Header;
 use crate::components::items_table::ItemsTable;
 use crate::components::pagination::Pagination;
@@ -48,12 +50,15 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
     let (selected_states, set_selected_states) = create_signal::<HashSet<String>>(HashSet::new());
     let (selected_locations, set_selected_locations) =
         create_signal::<HashSet<String>>(HashSet::new());
+    let (search_input, set_search_input) = create_signal(String::new());
+    let (search_text, set_search_text) = create_signal(String::new());
 
     // Reset to page 1 when filters change
     create_effect(move |_| {
         let _ = selected_types.get();
         let _ = selected_states.get();
         let _ = selected_locations.get();
+        let _ = search_text.get();
         set_page.set(1);
     });
 
@@ -73,22 +78,42 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
             states.sort();
             let mut locations: Vec<String> = selected_locations.get().into_iter().collect();
             locations.sort();
-            (org_id, page.get(), per_page.get(), types, states, locations)
+            let search = search_text.get();
+            (
+                org_id,
+                page.get(),
+                per_page.get(),
+                types,
+                states,
+                locations,
+                search,
+            )
         },
-        move |(org_id, page, per_page, types, states, locations)| {
+        move |(org_id, page, per_page, types, states, locations, search)| {
             // Build filters from the source values
             let location_ids: Vec<uuid::Uuid> = locations
                 .iter()
                 .filter_map(|s| uuid::Uuid::parse_str(s).ok())
                 .collect();
 
-            let filters = if types.is_empty() && states.is_empty() && location_ids.is_empty() {
+            let search_query = if search.is_empty() {
+                None
+            } else {
+                Some(search)
+            };
+
+            let filters = if types.is_empty()
+                && states.is_empty()
+                && location_ids.is_empty()
+                && search_query.is_none()
+            {
                 None
             } else {
                 Some(ItemFilters {
                     item_types: types,
                     states,
                     location_ids,
+                    search_query,
                 })
             };
 
@@ -150,9 +175,15 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                                     .collect();
                                 let has_filters = !selected_types.get().is_empty()
                                     || !selected_states.get().is_empty()
-                                    || !selected_locations.get().is_empty();
+                                    || !selected_locations.get().is_empty()
+                                    || !search_text.get().is_empty();
                                 view! {
                                     <FilterBar>
+                                        <FilterSearchInput
+                                            value=search_input
+                                            set_value=set_search_input
+                                            set_committed=set_search_text
+                                        />
                                         <FilterDropdown
                                             label="Type"
                                             options=type_options.get_value()
@@ -178,6 +209,8 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                                                     set_selected_types.set(std::collections::HashSet::new());
                                                     set_selected_states.set(std::collections::HashSet::new());
                                                     set_selected_locations.set(std::collections::HashSet::new());
+                                                    set_search_input.set(String::new());
+                                                    set_search_text.set(String::new());
                                                 }
                                             >
                                                 "Clear Filters"

@@ -170,6 +170,7 @@ pub struct ItemFilters {
     pub item_types: Vec<String>,
     pub states: Vec<String>,
     pub location_ids: Vec<Uuid>,
+    pub search_query: Option<String>,
 }
 
 /// Fetch paginated items for an organization with optional filters
@@ -201,6 +202,20 @@ pub async fn get_items(
         if !f.location_ids.is_empty() {
             let loc_str: Vec<String> = f.location_ids.iter().map(|id| id.to_string()).collect();
             url.push_str(&format!("&location_id={}", loc_str.join(",")));
+        }
+        if let Some(ref q) = f.search_query
+            && !q.is_empty()
+        {
+            // Manual percent-encoding for the search query
+            let encoded: String = q
+                .chars()
+                .map(|c| match c {
+                    'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => c.to_string(),
+                    ' ' => "+".to_string(),
+                    _ => format!("%{:02X}", c as u32),
+                })
+                .collect();
+            url.push_str(&format!("&search={}", encoded));
         }
     }
 

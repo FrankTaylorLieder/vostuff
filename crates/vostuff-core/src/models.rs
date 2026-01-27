@@ -392,4 +392,6 @@ pub struct ItemFilterParams {
     pub state: Option<String>,
     /// Filter by location IDs (comma-separated UUIDs)
     pub location_id: Option<String>,
+    /// Text search across name, description, and notes (ILIKE)
+    pub search: Option<String>,
 }

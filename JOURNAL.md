@@ -1,5 +1,22 @@
 # VOStuff Project Journal
 
+## 2026-01-27 - Add Text Search to Items List
+
+**Prompts:**
+- "Implement the following plan: Add Text Search to Items List" (with detailed plan for searching across name, description, and notes fields using server-side ILIKE matching)
+- "Not quite, when searching the UI, how do I submit the search request. There is not 'Search' button." — chose Enter key to submit
+
+**Summary:**
+Added a text search input to the filter bar on the home page. Search is submitted by pressing Enter. Changes across 5 files:
+
+1. **`crates/vostuff-core/src/models.rs`**: Added `search: Option<String>` field to `ItemFilterParams`
+2. **`crates/vostuff-api/src/api/handlers/items.rs`**: Added ILIKE WHERE clause for search across name, description, and notes columns, binding the `%query%` pattern to both count and items queries
+3. **`crates/vostuff-web/src/server_fns/items.rs`**: Added `search_query: Option<String>` to `ItemFilters` and percent-encodes it into the API URL
+4. **`crates/vostuff-web/src/pages/home.rs`**: Added two signals — `search_input` (tracks keystrokes) and `search_text` (committed on Enter). Only `search_text` drives the resource. Integrated with page-reset effect, resource dependency tuple, filter construction, `has_filters` check, and clear-filters handler
+5. **`crates/vostuff-web/style/main.css`**: Added `.filter-search-input` styles
+
+---
+
 ## 2026-01-22 - CLZ CSV Importer Tool
 
 **Prompts:**

@@ -435,6 +435,29 @@ body {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+/* Filter Search Input */
+.filter-search-input {
+  padding: 10px 14px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #333;
+  background: #f8f9fa;
+  min-width: 200px;
+  transition: all 0.2s;
+}
+
+.filter-search-input:focus {
+  outline: none;
+  border-color: #4A90E2;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.filter-search-input::placeholder {
+  color: #999;
+}
+
 /* Filter Dropdown */
 .filter-dropdown {
   position: relative;

@@ -137,6 +137,35 @@ pub fn FilterDropdown(
     }
 }
 
+/// Text search input that submits on Enter
+#[component]
+pub fn FilterSearchInput(
+    /// Current input value
+    value: ReadSignal<String>,
+    /// Setter for the input value (updated on every keystroke)
+    set_value: WriteSignal<String>,
+    /// Setter for the committed search (updated on Enter)
+    set_committed: WriteSignal<String>,
+) -> impl IntoView {
+    view! {
+        <input
+            type="text"
+            class="filter-search-input"
+            placeholder="Search... (Enter to submit)"
+            prop:value=move || value.get()
+            on:input=move |ev| {
+                set_value.set(event_target_value(&ev));
+            }
+            on:keydown=move |ev: web_sys::KeyboardEvent| {
+                if ev.key() == "Enter" {
+                    ev.prevent_default();
+                    set_committed.set(value.get_untracked());
+                }
+            }
+        />
+    }
+}
+
 /// Filter bar containing multiple filter dropdowns
 #[component]
 pub fn FilterBar(children: Children) -> impl IntoView {
