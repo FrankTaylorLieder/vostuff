@@ -1,19 +1,32 @@
 # VOStuff Project Journal
 
+## 2026-01-27 - Highlight Search Matches in Items Table
+
+**Prompts:**
+- Implement the following plan: Highlight Search Matches in Items Table
+
+**Summary:**
+Added search match highlighting to the items table. When a search query is active, matching text in the Name column (main row) and Description/Notes (expanded row) is wrapped in `<mark class="search-highlight">` with a subtle yellow background (`#fff9c4`). Changes:
+- `items_table.rs`: Added `highlight_match()` helper that does case-insensitive splitting of text into matching/non-matching segments. Added `search_query` prop to `ItemsTable` and `ItemExpandedRow` components. Applied highlighting to name, description, and notes fields.
+- `home.rs`: Passed `search_text.get()` as `search_query` prop to `ItemsTable`.
+- `main.css`: Added `.search-highlight` style with subtle yellow background.
+
 ## 2026-01-27 - Add Text Search to Items List
 
 **Prompts:**
 - "Implement the following plan: Add Text Search to Items List" (with detailed plan for searching across name, description, and notes fields using server-side ILIKE matching)
 - "Not quite, when searching the UI, how do I submit the search request. There is not 'Search' button." — chose Enter key to submit
+- Fixed SSR hydration mismatch panic caused by bare `<input>` element among Leptos component siblings
 
 **Summary:**
-Added a text search input to the filter bar on the home page. Search is submitted by pressing Enter. Changes across 5 files:
+Added a text search input to the filter bar on the home page. Search is submitted by pressing Enter. Changes across 6 files:
 
 1. **`crates/vostuff-core/src/models.rs`**: Added `search: Option<String>` field to `ItemFilterParams`
 2. **`crates/vostuff-api/src/api/handlers/items.rs`**: Added ILIKE WHERE clause for search across name, description, and notes columns, binding the `%query%` pattern to both count and items queries
 3. **`crates/vostuff-web/src/server_fns/items.rs`**: Added `search_query: Option<String>` to `ItemFilters` and percent-encodes it into the API URL
-4. **`crates/vostuff-web/src/pages/home.rs`**: Added two signals — `search_input` (tracks keystrokes) and `search_text` (committed on Enter). Only `search_text` drives the resource. Integrated with page-reset effect, resource dependency tuple, filter construction, `has_filters` check, and clear-filters handler
-5. **`crates/vostuff-web/style/main.css`**: Added `.filter-search-input` styles
+4. **`crates/vostuff-web/src/components/filter_dropdown.rs`**: Added `FilterSearchInput` component (wrapping the input in a component avoids Leptos SSR hydration key mismatches)
+5. **`crates/vostuff-web/src/pages/home.rs`**: Added two signals — `search_input` (tracks keystrokes) and `search_text` (committed on Enter). Only `search_text` drives the resource. Integrated with page-reset effect, resource dependency tuple, filter construction, `has_filters` check, and clear-filters handler
+6. **`crates/vostuff-web/style/main.css`**: Added `.filter-search-input` styles
 
 ---
 

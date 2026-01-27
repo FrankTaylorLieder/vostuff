@@ -4,8 +4,37 @@ use uuid::Uuid;
 
 use crate::server_fns::items::Item;
 
+fn highlight_match(text: &str, query: &str) -> View {
+    if query.is_empty() {
+        return text.to_string().into_view();
+    }
+    let lower_text = text.to_lowercase();
+    let lower_query = query.to_lowercase();
+    let mut fragments: Vec<View> = Vec::new();
+    let mut start = 0;
+    while let Some(pos) = lower_text[start..].find(&lower_query) {
+        let abs_pos = start + pos;
+        if abs_pos > start {
+            fragments.push(text[start..abs_pos].to_string().into_view());
+        }
+        let matched = &text[abs_pos..abs_pos + query.len()];
+        fragments.push(
+            view! { <mark class="search-highlight">{matched.to_string()}</mark> }.into_view(),
+        );
+        start = abs_pos + query.len();
+    }
+    if start < text.len() {
+        fragments.push(text[start..].to_string().into_view());
+    }
+    fragments.collect_view()
+}
+
 #[component]
-pub fn ItemsTable(items: Vec<Item>, locations: HashMap<Uuid, String>) -> impl IntoView {
+pub fn ItemsTable(
+    items: Vec<Item>,
+    locations: HashMap<Uuid, String>,
+    #[prop(default = String::new())] search_query: String,
+) -> impl IntoView {
     let (expanded_row, set_expanded_row) = create_signal::<Option<Uuid>>(None);
 
     let toggle_row = move |item_id: Uuid| {
@@ -39,6 +68,8 @@ pub fn ItemsTable(items: Vec<Item>, locations: HashMap<Uuid, String>) -> impl In
                             .unwrap_or_else(|| "-".to_string());
                         let is_expanded = move || expanded_row.get() == Some(item_id);
                         let item_for_details = item.clone();
+                        let sq = search_query.clone();
+                        let sq2 = search_query.clone();
                         view! {
                             <tr
                                 class="item-row"
@@ -46,7 +77,7 @@ pub fn ItemsTable(items: Vec<Item>, locations: HashMap<Uuid, String>) -> impl In
                                 on:click=move |_| toggle_row(item_id)
                             >
                                 <td class="col-type">{item.item_type.display_name()}</td>
-                                <td class="col-name">{item.name.clone()}</td>
+                                <td class="col-name">{highlight_match(&item.name, &sq)}</td>
                                 <td class="col-state">
                                     <span class=format!("state-badge {}", item.state.css_class())>
                                         {item.state.display_name()}
@@ -55,7 +86,7 @@ pub fn ItemsTable(items: Vec<Item>, locations: HashMap<Uuid, String>) -> impl In
                                 <td class="col-location">{location_name.clone()}</td>
                             </tr>
                             <Show when=is_expanded fallback=|| ()>
-                                <ItemExpandedRow item=item_for_details.clone() location_name=location_name.clone()/>
+                                <ItemExpandedRow item=item_for_details.clone() location_name=location_name.clone() search_query=sq2.clone()/>
                             </Show>
                         }
                     })
@@ -66,7 +97,11 @@ pub fn ItemsTable(items: Vec<Item>, locations: HashMap<Uuid, String>) -> impl In
 }
 
 #[component]
-fn ItemExpandedRow(item: Item, location_name: String) -> impl IntoView {
+fn ItemExpandedRow(
+    item: Item,
+    location_name: String,
+    #[prop(default = String::new())] search_query: String,
+) -> impl IntoView {
     let date_acquired = item
         .date_acquired
         .map(|d| d.format("%Y-%m-%d").to_string())
@@ -82,7 +117,7 @@ fn ItemExpandedRow(item: Item, location_name: String) -> impl IntoView {
                         <div class="detail-group">
                             <span class="detail-label">"Description:"</span>
                             <span class="detail-value">
-                                {item.description.unwrap_or_else(|| "-".to_string())}
+                                {highlight_match(&item.description.unwrap_or_else(|| "-".to_string()), &search_query)}
                             </span>
                         </div>
                     </div>
@@ -90,7 +125,7 @@ fn ItemExpandedRow(item: Item, location_name: String) -> impl IntoView {
                         <div class="detail-group">
                             <span class="detail-label">"Notes:"</span>
                             <span class="detail-value">
-                                {item.notes.unwrap_or_else(|| "-".to_string())}
+                                {highlight_match(&item.notes.unwrap_or_else(|| "-".to_string()), &search_query)}
                             </span>
                         </div>
                     </div>

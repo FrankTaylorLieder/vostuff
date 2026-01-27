@@ -237,6 +237,7 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                                             <ItemsTable
                                                 items=paginated.items.clone()
                                                 locations=location_map
+                                                search_query=search_text.get()
                                             />
                                             <Pagination
                                                 current_page=page
