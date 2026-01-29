@@ -356,6 +356,104 @@ pub async fn get_item_details(
     })
 }
 
+/// Update item request (web-side)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UpdateItemRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date_acquired: Option<chrono::NaiveDate>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<ItemState>,
+    // Vinyl
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vinyl_size: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vinyl_speed: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vinyl_channels: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vinyl_disks: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vinyl_media_grading: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vinyl_sleeve_grading: Option<String>,
+    // CD
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cd_disks: Option<i32>,
+    // DVD
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dvd_disks: Option<i32>,
+    // Cassette
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cassette_cassettes: Option<i32>,
+    // Loan
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loan_date_loaned: Option<chrono::NaiveDate>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loan_date_due_back: Option<chrono::NaiveDate>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loan_loaned_to: Option<String>,
+    // Missing
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub missing_date_missing: Option<chrono::NaiveDate>,
+    // Disposed
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disposed_date_disposed: Option<chrono::NaiveDate>,
+}
+
+/// Update an item via the PATCH API
+#[server(UpdateItem, "/api")]
+pub async fn update_item(
+    org_id: Uuid,
+    item_id: Uuid,
+    req: UpdateItemRequest,
+) -> Result<(), ServerFnError<NoCustomError>> {
+    let token = get_auth_token().await?;
+
+    let api_base_url =
+        std::env::var("API_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+
+    let url = format!(
+        "{}/api/organizations/{}/items/{}",
+        api_base_url, org_id, item_id
+    );
+
+    let client = reqwest::Client::new();
+    let response = client
+        .patch(&url)
+        .header("Authorization", format!("Bearer {}", token))
+        .json(&req)
+        .send()
+        .await
+        .map_err(|e| {
+            ServerFnError::<NoCustomError>::ServerError(format!("API request failed: {}", e))
+        })?;
+
+    if response.status() == 401 {
+        return Err(ServerFnError::<NoCustomError>::ServerError(
+            "Not authenticated".to_string(),
+        ));
+    }
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(ServerFnError::<NoCustomError>::ServerError(format!(
+            "Failed to update item: {} - {}",
+            status, body
+        )));
+    }
+
+    Ok(())
+}
+
 /// Filter parameters for items query
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]

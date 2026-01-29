@@ -116,6 +116,27 @@ pub struct UpdateItemRequest {
     pub location_id: Option<Uuid>,
     pub date_acquired: Option<NaiveDate>,
     pub state: Option<ItemState>,
+    // Vinyl details
+    pub vinyl_size: Option<String>,
+    pub vinyl_speed: Option<String>,
+    pub vinyl_channels: Option<String>,
+    pub vinyl_disks: Option<i32>,
+    pub vinyl_media_grading: Option<String>,
+    pub vinyl_sleeve_grading: Option<String>,
+    // CD details
+    pub cd_disks: Option<i32>,
+    // DVD details
+    pub dvd_disks: Option<i32>,
+    // Cassette details
+    pub cassette_cassettes: Option<i32>,
+    // Loan details
+    pub loan_date_loaned: Option<NaiveDate>,
+    pub loan_date_due_back: Option<NaiveDate>,
+    pub loan_loaned_to: Option<String>,
+    // Missing details
+    pub missing_date_missing: Option<NaiveDate>,
+    // Disposed details
+    pub disposed_date_disposed: Option<NaiveDate>,
 }
 
 // Vinyl details

@@ -1,5 +1,31 @@
 # VOStuff Project Journal
 
+## 2026-01-29 - Inline Edit for Expanded Item Row (All Fields)
+
+**Prompts:**
+- Implement the plan for inline edit on expanded item rows, covering all base, type-specific, and state-specific fields.
+
+**Summary:**
+Implemented full inline editing capability for expanded item rows across 5 files:
+
+1. **`crates/vostuff-core/src/models.rs`** - Extended `UpdateItemRequest` with optional fields for vinyl details (size, speed, channels, disks, media/sleeve grading), CD/DVD disks, cassette count, loan details (date loaned, due back, loaned to), missing date, and disposed date.
+
+2. **`crates/vostuff-api/src/api/handlers/items.rs`** - Extended the `update_item` PATCH handler to upsert type-specific detail tables (vinyl_details, cd_details, dvd_details, cassette_details) and state-specific detail tables (item_loan_details, item_missing_details, item_disposed_details) using `INSERT ... ON CONFLICT DO UPDATE` queries.
+
+3. **`crates/vostuff-web/src/server_fns/items.rs`** - Added web-side `UpdateItemRequest` struct and `update_item` server function that calls the PATCH API endpoint.
+
+4. **`crates/vostuff-web/src/components/items_table.rs`** - Major rewrite of `ItemExpandedRow` to support edit mode:
+   - Edit button in display mode, OK/Cancel buttons in edit mode
+   - All base fields editable (name, description, notes, location dropdown, date acquired)
+   - Type displayed as read-only text
+   - Vinyl fields: select dropdowns for size/speed/channels/grading, number input for disks
+   - CD/DVD/Cassette: number inputs for disk/cassette count
+   - Loan/Missing/Disposed: date and text inputs for state-specific fields
+   - Uses `create_action` for async save, `store_value` for cancel/reset
+   - Refreshes details after successful save
+
+5. **`crates/vostuff-web/src/pages/home.rs`** - Added refresh counter signal to trigger items refetch after edits, passes locations list and update callback to `ItemsTable`.
+
 ## 2026-01-29 - Close Current Dropdown When Opening Another (no filtering)
 
 **Prompts:**

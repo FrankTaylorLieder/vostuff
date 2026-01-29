@@ -57,6 +57,9 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
     let (sort_by, set_sort_by) = create_signal("name".to_string());
     let (sort_order, set_sort_order) = create_signal("asc".to_string());
 
+    // Refresh counter to trigger items refetch after edits
+    let (refresh_counter, set_refresh_counter) = create_signal(0u32);
+
     // Reset to page 1 when filters change
     create_effect(move |_| {
         let _ = selected_types.get();
@@ -85,6 +88,7 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
             let search = search_text.get();
             let sb = sort_by.get();
             let so = sort_order.get();
+            let rc = refresh_counter.get();
             (
                 org_id,
                 page.get(),
@@ -95,9 +99,10 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                 search,
                 sb,
                 so,
+                rc,
             )
         },
-        move |(org_id, page, per_page, types, states, locations, search, sb, so)| {
+        move |(org_id, page, per_page, types, states, locations, search, sb, so, _rc)| {
             // Build filters from the source values
             let location_ids: Vec<uuid::Uuid> = locations
                 .iter()
@@ -252,11 +257,13 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                                             <ItemsTable
                                                 items=paginated.items.clone()
                                                 locations=location_map
+                                                locations_list=locations.clone()
                                                 search_query=search_text.get()
                                                 sort_by=sort_by.get()
                                                 sort_order=sort_order.get()
                                                 set_sort_by=set_sort_by
                                                 set_sort_order=set_sort_order
+                                                on_item_updated=Callback::new(move |()| set_refresh_counter.update(|c| *c += 1))
                                                 org_id=org_id
                                             />
                                             <Pagination

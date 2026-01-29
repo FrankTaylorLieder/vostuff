@@ -361,19 +361,143 @@ pub async fn update_item(
         .await
         .map_err(internal_error)?;
 
-    match row {
-        Some(row) => {
-            let item = ItemRow::from_row(&row).map_err(internal_error)?;
-            Ok(Json(item.into()))
+    let row = match row {
+        Some(row) => row,
+        None => {
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "not_found".to_string(),
+                    message: "Item not found".to_string(),
+                }),
+            ));
         }
-        None => Err((
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                error: "not_found".to_string(),
-                message: "Item not found".to_string(),
-            }),
-        )),
+    };
+
+    let item = ItemRow::from_row(&row).map_err(internal_error)?;
+    let item_type_str = item.item_type.clone();
+    let state_str = item.state.clone();
+    let item: Item = item.into();
+
+    // Upsert vinyl details if any vinyl field is present and item is vinyl
+    let has_vinyl = req.vinyl_size.is_some()
+        || req.vinyl_speed.is_some()
+        || req.vinyl_channels.is_some()
+        || req.vinyl_disks.is_some()
+        || req.vinyl_media_grading.is_some()
+        || req.vinyl_sleeve_grading.is_some();
+    if has_vinyl && item_type_str == "vinyl" {
+        sqlx::query(
+            "INSERT INTO vinyl_details (item_id, size, speed, channels, disks, media_grading, sleeve_grading)
+             VALUES ($1, $2::vinyl_size, $3::vinyl_speed, $4::vinyl_channels, $5, $6::grading, $7::grading)
+             ON CONFLICT (item_id) DO UPDATE SET
+               size = COALESCE($2::vinyl_size, vinyl_details.size),
+               speed = COALESCE($3::vinyl_speed, vinyl_details.speed),
+               channels = COALESCE($4::vinyl_channels, vinyl_details.channels),
+               disks = COALESCE($5, vinyl_details.disks),
+               media_grading = COALESCE($6::grading, vinyl_details.media_grading),
+               sleeve_grading = COALESCE($7::grading, vinyl_details.sleeve_grading)"
+        )
+        .bind(item_id)
+        .bind(&req.vinyl_size)
+        .bind(&req.vinyl_speed)
+        .bind(&req.vinyl_channels)
+        .bind(&req.vinyl_disks)
+        .bind(&req.vinyl_media_grading)
+        .bind(&req.vinyl_sleeve_grading)
+        .execute(&state.pool)
+        .await
+        .map_err(internal_error)?;
     }
+
+    // Upsert CD details
+    if req.cd_disks.is_some() && item_type_str == "cd" {
+        sqlx::query(
+            "INSERT INTO cd_details (item_id, disks) VALUES ($1, $2)
+             ON CONFLICT (item_id) DO UPDATE SET disks = COALESCE($2, cd_details.disks)",
+        )
+        .bind(item_id)
+        .bind(&req.cd_disks)
+        .execute(&state.pool)
+        .await
+        .map_err(internal_error)?;
+    }
+
+    // Upsert DVD details
+    if req.dvd_disks.is_some() && item_type_str == "dvd" {
+        sqlx::query(
+            "INSERT INTO dvd_details (item_id, disks) VALUES ($1, $2)
+             ON CONFLICT (item_id) DO UPDATE SET disks = COALESCE($2, dvd_details.disks)",
+        )
+        .bind(item_id)
+        .bind(&req.dvd_disks)
+        .execute(&state.pool)
+        .await
+        .map_err(internal_error)?;
+    }
+
+    // Upsert cassette details
+    if req.cassette_cassettes.is_some() && item_type_str == "cassette" {
+        sqlx::query(
+            "INSERT INTO cassette_details (item_id, cassettes) VALUES ($1, $2)
+             ON CONFLICT (item_id) DO UPDATE SET cassettes = COALESCE($2, cassette_details.cassettes)"
+        )
+        .bind(item_id)
+        .bind(&req.cassette_cassettes)
+        .execute(&state.pool)
+        .await
+        .map_err(internal_error)?;
+    }
+
+    // Upsert loan details
+    let has_loan = req.loan_date_loaned.is_some()
+        || req.loan_date_due_back.is_some()
+        || req.loan_loaned_to.is_some();
+    if has_loan && state_str == "loaned" {
+        sqlx::query(
+            "INSERT INTO item_loan_details (item_id, date_loaned, date_due_back, loaned_to)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (item_id) DO UPDATE SET
+               date_loaned = COALESCE($2, item_loan_details.date_loaned),
+               date_due_back = COALESCE($3, item_loan_details.date_due_back),
+               loaned_to = COALESCE($4, item_loan_details.loaned_to)",
+        )
+        .bind(item_id)
+        .bind(&req.loan_date_loaned)
+        .bind(&req.loan_date_due_back)
+        .bind(&req.loan_loaned_to)
+        .execute(&state.pool)
+        .await
+        .map_err(internal_error)?;
+    }
+
+    // Upsert missing details
+    if req.missing_date_missing.is_some() && state_str == "missing" {
+        sqlx::query(
+            "INSERT INTO item_missing_details (item_id, date_missing) VALUES ($1, $2)
+             ON CONFLICT (item_id) DO UPDATE SET date_missing = COALESCE($2, item_missing_details.date_missing)"
+        )
+        .bind(item_id)
+        .bind(&req.missing_date_missing)
+        .execute(&state.pool)
+        .await
+        .map_err(internal_error)?;
+    }
+
+    // Upsert disposed details
+    if req.disposed_date_disposed.is_some() && state_str == "disposed" {
+        sqlx::query(
+            "INSERT INTO item_disposed_details (item_id, date_disposed) VALUES ($1, $2)
+             ON CONFLICT (item_id) DO UPDATE SET date_disposed = COALESCE($2, item_disposed_details.date_disposed)"
+        )
+        .bind(item_id)
+        .bind(&req.disposed_date_disposed)
+        .execute(&state.pool)
+        .await
+        .map_err(internal_error)?;
+    }
+
+    Ok(Json(item))
 }
 
 /// Delete an item

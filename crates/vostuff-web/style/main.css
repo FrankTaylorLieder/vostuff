@@ -328,6 +328,26 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 150px;
+  flex: 1;
+}
+
+.edit-input,
+.edit-select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.edit-input-narrow {
+  width: 80px;
+  flex: none;
+  text-align: center;
+  font-size: 16px;
+  padding: 4px 2px;
+  -moz-appearance: textfield;
+}
+
+.detail-group:has(.edit-input-narrow) {
+  flex: 0 0 auto;
 }
 
 .detail-label {
@@ -340,6 +360,18 @@ body {
 .detail-value {
   font-size: 14px;
   color: #333;
+}
+
+.edit-textarea {
+  width: 100%;
+  min-height: 80px;
+  resize: vertical;
+}
+
+.detail-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 /* Pagination */
