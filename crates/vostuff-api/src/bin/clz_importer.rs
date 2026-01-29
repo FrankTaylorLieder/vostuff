@@ -458,10 +458,10 @@ fn build_notes(record: &ClzRecord) -> Option<String> {
 
     // Helper to add non-empty optional fields
     let mut add_field = |label: &str, value: &Option<String>| {
-        if let Some(v) = value {
-            if !v.is_empty() {
-                parts.push(format!("{}: {}", label, v));
-            }
+        if let Some(v) = value
+            && !v.is_empty()
+        {
+            parts.push(format!("- **{}:** {}", label, v));
         }
     };
 
