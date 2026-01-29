@@ -2,10 +2,20 @@ use leptos::*;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use pulldown_cmark::{Options, Parser, html};
+
 use crate::server_fns::items::{
     Grading, Item, ItemFullDetails, ItemState, ItemType, Location, UpdateItemRequest,
     VinylChannels, VinylSize, VinylSpeed, get_item_details, update_item,
 };
+
+fn render_markdown(text: &str) -> String {
+    let options = Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES;
+    let parser = Parser::new_ext(text, options);
+    let mut html_output = String::new();
+    html::push_html(&mut html_output, parser);
+    html_output
+}
 
 fn highlight_match(text: &str, query: &str) -> View {
     if query.is_empty() {
@@ -43,10 +53,14 @@ pub fn ItemsTable(
     #[prop(optional)] set_sort_by: Option<WriteSignal<String>>,
     #[prop(optional)] set_sort_order: Option<WriteSignal<String>>,
     #[prop(optional)] on_item_updated: Option<Callback<()>>,
+    #[prop(optional)] expanded_row: Option<ReadSignal<Option<Uuid>>>,
+    #[prop(optional)] set_expanded_row: Option<WriteSignal<Option<Uuid>>>,
     org_id: Uuid,
 ) -> impl IntoView {
     let locations_list = store_value(locations_list);
-    let (expanded_row, set_expanded_row) = create_signal::<Option<Uuid>>(None);
+    let (local_expanded, local_set_expanded) = create_signal::<Option<Uuid>>(None);
+    let expanded_row = expanded_row.unwrap_or(local_expanded);
+    let set_expanded_row = set_expanded_row.unwrap_or(local_set_expanded);
 
     let toggle_row = move |item_id: Uuid| {
         set_expanded_row.update(|current| {
@@ -641,9 +655,7 @@ fn ItemExpandedRow(
                                     <div class="detail-row">
                                         <div class="detail-group">
                                             <span class="detail-label">"Notes:"</span>
-                                            <span class="detail-value detail-value-multiline">
-                                                {highlight_match(&notes_text, &search_query)}
-                                            </span>
+                                            <div class="detail-value markdown-content" inner_html=render_markdown(&notes_text)></div>
                                         </div>
                                     </div>
                                     <div class="detail-row">

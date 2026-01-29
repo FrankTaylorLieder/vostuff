@@ -60,6 +60,9 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
     // Refresh counter to trigger items refetch after edits
     let (refresh_counter, set_refresh_counter) = create_signal(0u32);
 
+    // Expanded row state (owned here so it persists across refetches)
+    let (expanded_row, set_expanded_row) = create_signal::<Option<uuid::Uuid>>(None);
+
     // Reset to page 1 when filters change
     create_effect(move |_| {
         let _ = selected_types.get();
@@ -264,6 +267,8 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                                                 set_sort_by=set_sort_by
                                                 set_sort_order=set_sort_order
                                                 on_item_updated=Callback::new(move |()| set_refresh_counter.update(|c| *c += 1))
+                                                expanded_row=expanded_row
+                                                set_expanded_row=set_expanded_row
                                                 org_id=org_id
                                             />
                                             <Pagination

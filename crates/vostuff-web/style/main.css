@@ -366,10 +366,79 @@ body {
   white-space: pre-wrap;
 }
 
+.markdown-content {
+  line-height: 1.5;
+}
+
+.markdown-content p {
+  margin: 0 0 8px 0;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin: 0 0 8px 0;
+  padding-left: 24px;
+}
+
+.markdown-content code {
+  background-color: #e8e8e8;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 13px;
+}
+
+.markdown-content pre {
+  background-color: #f0f0f0;
+  padding: 8px 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 0 0 8px 0;
+}
+
+.markdown-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown-content blockquote {
+  border-left: 3px solid #ccc;
+  margin: 0 0 8px 0;
+  padding-left: 12px;
+  color: #666;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4 {
+  margin: 8px 0 4px 0;
+}
+
+.markdown-content table {
+  border-collapse: collapse;
+  margin: 0 0 8px 0;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid #ddd;
+  padding: 4px 8px;
+}
+
 .edit-textarea {
   width: 100%;
   min-height: 80px;
   resize: vertical;
+  line-height: 1.5;
+  font-size: 14px;
+  font-family: inherit;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  caret-color: black;
 }
 
 .detail-actions {

@@ -33,6 +33,9 @@ serde_json = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 
+# Markdown rendering
+pulldown-cmark = "0.12"
+
 # HTTP client for server functions
 reqwest = { workspace = true }
 

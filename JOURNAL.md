@@ -1,12 +1,22 @@
 # VOStuff Project Journal
 
-## 2026-01-29 - Inline Edit for Expanded Item Row (All Fields)
+## 2026-01-29 - Inline Edit for Expanded Item Row (All Fields) + Polish
 
 **Prompts:**
 - Implement the plan for inline edit on expanded item rows, covering all base, type-specific, and state-specific fields.
+- "Can you put a little space between the OK and Cancel buttons."
+- "The description, Name and Notes fields are not the full width. Can you make them wider, to fill the width better."
+- "Almost... the text boxes are good. Can you make the disks (and other number fields) much narrower with larger up/down adjustment buttons."
+- "Can you make the notes field of the entry properly formatted as multiline text when the item is expanded. The field should only take the space it needed."
+- "Can we upgrade the notes field to be markdown, with formatting."
+- "When clicking OK after editing an entry, make sure this entry stays selected to you can see the result of the edit."
+- "Finally, when editing the notes fields, the edit cursor disappears a lot of time. Mostly on empty lines. Can you make sure it is always visible."
+- "Can you update the journal with the latest changes."
 
 **Summary:**
-Implemented full inline editing capability for expanded item rows across 5 files:
+Implemented full inline editing capability for expanded item rows across 5 files, then polished the UI through several follow-up iterations:
+
+**Core implementation:**
 
 1. **`crates/vostuff-core/src/models.rs`** - Extended `UpdateItemRequest` with optional fields for vinyl details (size, speed, channels, disks, media/sleeve grading), CD/DVD disks, cassette count, loan details (date loaned, due back, loaned to), missing date, and disposed date.
 
@@ -25,6 +35,15 @@ Implemented full inline editing capability for expanded item rows across 5 files
    - Refreshes details after successful save
 
 5. **`crates/vostuff-web/src/pages/home.rs`** - Added refresh counter signal to trigger items refetch after edits, passes locations list and update callback to `ItemsTable`.
+
+**UI polish:**
+
+- Added spacing between OK/Cancel buttons via `.detail-actions` CSS with `gap: 8px`
+- Made Name, Description, Notes fields fill full width using `flex: 1` on `.detail-group` and `width: 100%` on `.edit-input`/`.edit-select`
+- Made number fields (disks, cassettes) narrow at 80px via `.edit-input-narrow` class
+- Added markdown rendering for Notes field using `pulldown-cmark` crate, with CSS styles for headings, lists, code blocks, blockquotes, and tables
+- Lifted `expanded_row` signal from `ItemsTable` to `AuthenticatedHome` so the expanded item persists across refetches after saving edits
+- Fixed cursor visibility in notes textarea by setting explicit `line-height`, `font-size`, `font-family`, and `caret-color`
 
 ## 2026-01-29 - Close Current Dropdown When Opening Another (no filtering)
 
