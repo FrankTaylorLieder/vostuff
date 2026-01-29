@@ -1,5 +1,26 @@
 # VOStuff Project Journal
 
+## 2026-01-29 - Close Current Dropdown When Opening Another (no filtering)
+
+**Prompts:**
+- "One more change. When selecting a second filter drop down, close the current one, keeping the current selected items."
+- "Not quite. Clicking on the second filter list should not perform the filtering, instead it should close the current list and open the new list. Only actually filter when selecting Done on list that's open."
+
+**Summary:**
+Added an `ActiveDropdown` context (shared `ReadSignal`/`WriteSignal` for the currently-open dropdown label) provided by `FilterBar`. Each `FilterDropdown` identifies itself by its label. When one opens, it sets itself as active via the shared context, which automatically closes any other open dropdown. Switching dropdowns discards uncommitted staged selections (they reset from the parent on next open). Only pressing "Done" commits staged selections to the parent signal and triggers filtering.
+
+---
+
+## 2026-01-29 - Defer Filter Dropdown Until "Done" Is Pressed
+
+**Prompts:**
+- "One small change. Now, when selecting items from the different filter lists, it immediately filters. Can you leave the filter selector up and wait until 'Done' is pressed before filtering."
+
+**Summary:**
+Changed `FilterDropdown` component to use a local staging signal (`staged`) for checkbox selections. When the dropdown opens, the staged state is synced from the parent's committed selection. "Select All", "Clear", and individual checkbox toggles all operate on the staged signal. Only when "Done" is pressed does the staged selection get committed to the parent signal, triggering the actual filter/fetch. This prevents re-fetching on every checkbox click.
+
+---
+
 ## 2026-01-29 - Display All Type/State Fields in Expanded Item Row
 
 **Prompts:**

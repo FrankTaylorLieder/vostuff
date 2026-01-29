@@ -8,6 +8,14 @@ pub struct FilterOption {
     pub label: String,
 }
 
+/// Shared context so only one dropdown is open at a time.
+/// Holds the label of the currently-open dropdown (None = all closed).
+#[derive(Clone, Copy)]
+pub struct ActiveDropdown {
+    pub active: ReadSignal<Option<String>>,
+    pub set_active: WriteSignal<Option<String>>,
+}
+
 /// Multi-select filter dropdown component
 #[component]
 pub fn FilterDropdown(
@@ -21,15 +29,43 @@ pub fn FilterDropdown(
     /// Callback when selection changes
     set_selected: WriteSignal<HashSet<String>>,
 ) -> impl IntoView {
-    let (is_open, set_is_open) = create_signal(false);
+    let dropdown_id = label.clone();
+    let dropdown_id_for_open = dropdown_id.clone();
+    let dropdown_id_for_done = dropdown_id.clone();
+
+    // Use shared active-dropdown context if available, otherwise local signal
+    let active_ctx = use_context::<ActiveDropdown>();
+
+    let (local_open, set_local_open) = create_signal(false);
+
+    let is_open = {
+        let id = dropdown_id.clone();
+        Signal::derive(move || match active_ctx {
+            Some(ctx) => ctx.active.get().as_deref() == Some(&id),
+            None => local_open.get(),
+        })
+    };
+
+    // Local staging signal — edits happen here, committed on "Done"
+    let (staged, set_staged) = create_signal::<HashSet<String>>(selected.get_untracked());
+
+    // Sync staged from parent when the dropdown opens
+    create_effect(move |_prev_open: Option<bool>| {
+        let now_open = is_open.get();
+        // Reset staged to committed selection on open (discard uncommitted changes)
+        if now_open {
+            set_staged.set(selected.get_untracked());
+        }
+        now_open
+    });
 
     // Store options and values for use in reactive closures
     let options_store = store_value(options.clone());
     let all_values = store_value(options.iter().map(|o| o.value.clone()).collect::<Vec<_>>());
 
-    // Toggle a single option
+    // Toggle a single option in the staging signal
     let toggle_option = move |value: String| {
-        set_selected.update(|s| {
+        set_staged.update(|s| {
             if s.contains(&value) {
                 s.remove(&value);
             } else {
@@ -38,7 +74,7 @@ pub fn FilterDropdown(
         });
     };
 
-    // Generate button text based on selection
+    // Generate button text based on committed selection
     let button_text = {
         let label = label.clone();
         move || {
@@ -67,7 +103,21 @@ pub fn FilterDropdown(
             <button
                 class="filter-dropdown-btn"
                 class:active=move || !selected.get().is_empty()
-                on:click=move |_| set_is_open.update(|o| *o = !*o)
+                on:click={
+                    let id = dropdown_id_for_open.clone();
+                    move |_| {
+                        if let Some(ctx) = active_ctx {
+                            let current = ctx.active.get_untracked();
+                            if current.as_deref() == Some(&id) {
+                                ctx.set_active.set(None);
+                            } else {
+                                ctx.set_active.set(Some(id.clone()));
+                            }
+                        } else {
+                            set_local_open.update(|o| *o = !*o);
+                        }
+                    }
+                }
             >
                 <span class="filter-dropdown-text">{button_text}</span>
                 <span class="filter-dropdown-arrow">
@@ -82,7 +132,7 @@ pub fn FilterDropdown(
                             class="filter-action-btn"
                             on:click=move |_| {
                                 let values = all_values.get_value();
-                                set_selected
+                                set_staged
                                     .update(|s| {
                                         for val in values {
                                             s.insert(val);
@@ -96,7 +146,7 @@ pub fn FilterDropdown(
                         <button
                             class="filter-action-btn"
                             on:click=move |_| {
-                                set_selected.update(|s| s.clear());
+                                set_staged.update(|s| s.clear());
                             }
                         >
 
@@ -116,7 +166,7 @@ pub fn FilterDropdown(
                                         <label class="filter-option">
                                             <input
                                                 type="checkbox"
-                                                checked=move || selected.get().contains(&value_for_check)
+                                                checked=move || staged.get().contains(&value_for_check)
                                                 on:change=move |_| toggle_option(value_for_toggle.clone())
                                             />
                                             <span class="filter-option-label">{label}</span>
@@ -127,7 +177,23 @@ pub fn FilterDropdown(
                         }}
                     </div>
                     <div class="filter-dropdown-footer">
-                        <button class="filter-done-btn" on:click=move |_| set_is_open.set(false)>
+                        <button
+                            class="filter-done-btn"
+                            on:click={
+                                let id = dropdown_id_for_done.clone();
+                                move |_| {
+                                    set_selected.set(staged.get_untracked());
+                                    if let Some(ctx) = active_ctx {
+                                        let current = ctx.active.get_untracked();
+                                        if current.as_deref() == Some(&id) {
+                                            ctx.set_active.set(None);
+                                        }
+                                    } else {
+                                        set_local_open.set(false);
+                                    }
+                                }
+                            }
+                        >
                             "Done"
                         </button>
                     </div>
@@ -169,6 +235,9 @@ pub fn FilterSearchInput(
 /// Filter bar containing multiple filter dropdowns
 #[component]
 pub fn FilterBar(children: Children) -> impl IntoView {
+    let (active, set_active) = create_signal::<Option<String>>(None);
+    provide_context(ActiveDropdown { active, set_active });
+
     view! {
         <div class="filter-bar">
             {children()}
