@@ -641,7 +641,7 @@ fn ItemExpandedRow(
                                     <div class="detail-row">
                                         <div class="detail-group">
                                             <span class="detail-label">"Notes:"</span>
-                                            <span class="detail-value">
+                                            <span class="detail-value detail-value-multiline">
                                                 {highlight_match(&notes_text, &search_query)}
                                             </span>
                                         </div>

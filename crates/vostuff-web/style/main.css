@@ -362,6 +362,10 @@ body {
   color: #333;
 }
 
+.detail-value-multiline {
+  white-space: pre-wrap;
+}
+
 .edit-textarea {
   width: 100%;
   min-height: 80px;
