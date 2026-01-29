@@ -2,7 +2,7 @@ use leptos::*;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::server_fns::items::Item;
+use crate::server_fns::items::{Item, ItemFullDetails, get_item_details};
 
 fn highlight_match(text: &str, query: &str) -> View {
     if query.is_empty() {
@@ -38,6 +38,7 @@ pub fn ItemsTable(
     #[prop(default = "asc".to_string())] sort_order: String,
     #[prop(optional)] set_sort_by: Option<WriteSignal<String>>,
     #[prop(optional)] set_sort_order: Option<WriteSignal<String>>,
+    org_id: Uuid,
 ) -> impl IntoView {
     let (expanded_row, set_expanded_row) = create_signal::<Option<Uuid>>(None);
 
@@ -134,7 +135,7 @@ pub fn ItemsTable(
                                 <td class="col-location">{location_name.clone()}</td>
                             </tr>
                             <Show when=is_expanded fallback=|| ()>
-                                <ItemExpandedRow item=item_for_details.clone() location_name=location_name.clone() search_query=sq2.clone()/>
+                                <ItemExpandedRow item=item_for_details.clone() location_name=location_name.clone() search_query=sq2.clone() org_id=org_id/>
                             </Show>
                         }
                     })
@@ -144,18 +145,199 @@ pub fn ItemsTable(
     }
 }
 
+fn render_type_details(details: &ItemFullDetails) -> View {
+    if let Some(ref vd) = details.vinyl_details {
+        let size = vd.size.as_ref().map(|s| s.display_name()).unwrap_or("-");
+        let speed = vd.speed.as_ref().map(|s| s.display_name()).unwrap_or("-");
+        let channels = vd
+            .channels
+            .as_ref()
+            .map(|c| c.display_name())
+            .unwrap_or("-");
+        let disks = vd
+            .disks
+            .map(|d| d.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let media = vd
+            .media_grading
+            .as_ref()
+            .map(|g| g.display_name())
+            .unwrap_or("-");
+        let sleeve = vd
+            .sleeve_grading
+            .as_ref()
+            .map(|g| g.display_name())
+            .unwrap_or("-");
+        view! {
+            <div class="detail-section">
+                <h4>"Vinyl Details"</h4>
+                <div class="detail-row">
+                    <div class="detail-group">
+                        <span class="detail-label">"Size:"</span>
+                        <span class="detail-value">{size}</span>
+                    </div>
+                    <div class="detail-group">
+                        <span class="detail-label">"Speed:"</span>
+                        <span class="detail-value">{speed}</span>
+                    </div>
+                    <div class="detail-group">
+                        <span class="detail-label">"Channels:"</span>
+                        <span class="detail-value">{channels}</span>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-group">
+                        <span class="detail-label">"Disks:"</span>
+                        <span class="detail-value">{disks}</span>
+                    </div>
+                    <div class="detail-group">
+                        <span class="detail-label">"Media Grading:"</span>
+                        <span class="detail-value">{media}</span>
+                    </div>
+                    <div class="detail-group">
+                        <span class="detail-label">"Sleeve Grading:"</span>
+                        <span class="detail-value">{sleeve}</span>
+                    </div>
+                </div>
+            </div>
+        }
+        .into_view()
+    } else if let Some(ref cd) = details.cd_details {
+        let disks = cd
+            .disks
+            .map(|d| d.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        view! {
+            <div class="detail-section">
+                <h4>"CD Details"</h4>
+                <div class="detail-row">
+                    <div class="detail-group">
+                        <span class="detail-label">"Disks:"</span>
+                        <span class="detail-value">{disks}</span>
+                    </div>
+                </div>
+            </div>
+        }
+        .into_view()
+    } else if let Some(ref cas) = details.cassette_details {
+        let cassettes = cas
+            .cassettes
+            .map(|c| c.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        view! {
+            <div class="detail-section">
+                <h4>"Cassette Details"</h4>
+                <div class="detail-row">
+                    <div class="detail-group">
+                        <span class="detail-label">"Cassettes:"</span>
+                        <span class="detail-value">{cassettes}</span>
+                    </div>
+                </div>
+            </div>
+        }
+        .into_view()
+    } else if let Some(ref dvd) = details.dvd_details {
+        let disks = dvd
+            .disks
+            .map(|d| d.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        view! {
+            <div class="detail-section">
+                <h4>"DVD Details"</h4>
+                <div class="detail-row">
+                    <div class="detail-group">
+                        <span class="detail-label">"Disks:"</span>
+                        <span class="detail-value">{disks}</span>
+                    </div>
+                </div>
+            </div>
+        }
+        .into_view()
+    } else {
+        ().into_view()
+    }
+}
+
+fn render_state_details(details: &ItemFullDetails) -> View {
+    if let Some(ref loan) = details.loan_details {
+        let date_loaned = loan.date_loaned.format("%Y-%m-%d").to_string();
+        let date_due_back = loan
+            .date_due_back
+            .map(|d| d.format("%Y-%m-%d").to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let loaned_to = loan.loaned_to.clone();
+        view! {
+            <div class="detail-section">
+                <h4>"Loan Details"</h4>
+                <div class="detail-row">
+                    <div class="detail-group">
+                        <span class="detail-label">"Date Loaned:"</span>
+                        <span class="detail-value">{date_loaned}</span>
+                    </div>
+                    <div class="detail-group">
+                        <span class="detail-label">"Date Due Back:"</span>
+                        <span class="detail-value">{date_due_back}</span>
+                    </div>
+                    <div class="detail-group">
+                        <span class="detail-label">"Loaned To:"</span>
+                        <span class="detail-value">{loaned_to}</span>
+                    </div>
+                </div>
+            </div>
+        }
+        .into_view()
+    } else if let Some(ref missing) = details.missing_details {
+        let date_missing = missing.date_missing.format("%Y-%m-%d").to_string();
+        view! {
+            <div class="detail-section">
+                <h4>"Missing Details"</h4>
+                <div class="detail-row">
+                    <div class="detail-group">
+                        <span class="detail-label">"Date Missing:"</span>
+                        <span class="detail-value">{date_missing}</span>
+                    </div>
+                </div>
+            </div>
+        }
+        .into_view()
+    } else if let Some(ref disposed) = details.disposed_details {
+        let date_disposed = disposed.date_disposed.format("%Y-%m-%d").to_string();
+        view! {
+            <div class="detail-section">
+                <h4>"Disposed Details"</h4>
+                <div class="detail-row">
+                    <div class="detail-group">
+                        <span class="detail-label">"Date Disposed:"</span>
+                        <span class="detail-value">{date_disposed}</span>
+                    </div>
+                </div>
+            </div>
+        }
+        .into_view()
+    } else {
+        ().into_view()
+    }
+}
+
 #[component]
 fn ItemExpandedRow(
     item: Item,
     location_name: String,
     #[prop(default = String::new())] search_query: String,
+    org_id: Uuid,
 ) -> impl IntoView {
+    let item_id = item.id;
     let date_acquired = item
         .date_acquired
         .map(|d| d.format("%Y-%m-%d").to_string())
         .unwrap_or_else(|| "-".to_string());
 
     let date_entered = item.date_entered.format("%Y-%m-%d %H:%M").to_string();
+
+    let details_resource = create_resource(
+        move || (org_id, item_id),
+        move |(org_id, item_id)| async move { get_item_details(org_id, item_id).await },
+    );
 
     view! {
         <tr class="item-expanded">
@@ -191,6 +373,21 @@ fn ItemExpandedRow(
                             <span class="detail-value">{date_entered}</span>
                         </div>
                     </div>
+                    <Suspense fallback=move || view! { <div class="loading">"Loading details..."</div> }>
+                        {move || {
+                            details_resource.get().map(|result| match result {
+                                Ok(details) => {
+                                    let type_view = render_type_details(&details);
+                                    let state_view = render_state_details(&details);
+                                    view! {
+                                        {type_view}
+                                        {state_view}
+                                    }.into_view()
+                                }
+                                Err(_) => ().into_view(),
+                            })
+                        }}
+                    </Suspense>
                 </div>
             </td>
         </tr>

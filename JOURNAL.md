@@ -1,5 +1,27 @@
 # VOStuff Project Journal
 
+## 2026-01-29 - Display All Type/State Fields in Expanded Item Row
+
+**Prompts:**
+- "Implement the following plan: Display All Type/State Fields in Expanded Item Row"
+
+**Summary:**
+Implemented full detail fetching and display for expanded item rows. Changes across all three tiers:
+
+1. **vostuff-core/models.rs**: Added detail structs (`CdDetails`, `CassetteDetails`, `DvdDetails`, `LoanDetails`, `MissingDetails`, `DisposedDetails`) and the `ItemFullDetails` wrapper struct.
+
+2. **vostuff-api/handlers/items.rs**: New `get_item_details` endpoint (`GET /organizations/:org_id/items/:item_id/details`) that fetches the base item, then conditionally queries type-specific tables (vinyl_details, cd_details, cassette_details, dvd_details) and state-specific tables (item_loan_details, item_missing_details, item_disposed_details) based on item_type and state. Added FromRow structs and enum conversion helpers for vinyl enums and grading.
+
+3. **vostuff-api/handlers/mod.rs**: Registered the new details route.
+
+4. **vostuff-web/server_fns/items.rs**: Added client-side detail structs with display_name() methods for vinyl enums (VinylSize, VinylSpeed, VinylChannels, Grading), all detail structs, and the `get_item_details` server function.
+
+5. **vostuff-web/components/items_table.rs**: `ItemsTable` now accepts `org_id` prop. `ItemExpandedRow` uses `create_resource` to fetch details on expand. Added `render_type_details()` and `render_state_details()` helper functions that conditionally render type-specific sections (Vinyl with size/speed/channels/disks/grading, CD/DVD with disks, Cassette with cassettes) and state-specific sections (Loan with dates and loaned_to, Missing with date, Disposed with date).
+
+6. **vostuff-web/pages/home.rs**: Passes `org_id` through to `ItemsTable`.
+
+---
+
 ## 2026-01-27 - Column Sorting for Items Table
 
 **Prompts:**

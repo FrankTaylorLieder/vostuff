@@ -131,6 +131,70 @@ pub struct VinylDetails {
     pub sleeve_grading: Option<Grading>,
 }
 
+// CD details
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(ToSchema))]
+pub struct CdDetails {
+    pub item_id: Uuid,
+    pub disks: Option<i32>,
+}
+
+// Cassette details
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(ToSchema))]
+pub struct CassetteDetails {
+    pub item_id: Uuid,
+    pub cassettes: Option<i32>,
+}
+
+// DVD details
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(ToSchema))]
+pub struct DvdDetails {
+    pub item_id: Uuid,
+    pub disks: Option<i32>,
+}
+
+// Loan state details
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(ToSchema))]
+pub struct LoanDetails {
+    pub item_id: Uuid,
+    pub date_loaned: NaiveDate,
+    pub date_due_back: Option<NaiveDate>,
+    pub loaned_to: String,
+}
+
+// Missing state details
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(ToSchema))]
+pub struct MissingDetails {
+    pub item_id: Uuid,
+    pub date_missing: NaiveDate,
+}
+
+// Disposed state details
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(ToSchema))]
+pub struct DisposedDetails {
+    pub item_id: Uuid,
+    pub date_disposed: NaiveDate,
+}
+
+// Full item details including type-specific and state-specific data
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(ToSchema))]
+pub struct ItemFullDetails {
+    pub item: Item,
+    pub vinyl_details: Option<VinylDetails>,
+    pub cd_details: Option<CdDetails>,
+    pub cassette_details: Option<CassetteDetails>,
+    pub dvd_details: Option<DvdDetails>,
+    pub loan_details: Option<LoanDetails>,
+    pub missing_details: Option<MissingDetails>,
+    pub disposed_details: Option<DisposedDetails>,
+}
+
 // Location
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(ToSchema, sqlx::FromRow))]

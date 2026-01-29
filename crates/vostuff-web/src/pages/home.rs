@@ -257,6 +257,7 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                                                 sort_order=sort_order.get()
                                                 set_sort_by=set_sort_by
                                                 set_sort_order=set_sort_order
+                                                org_id=org_id
                                             />
                                             <Pagination
                                                 current_page=page

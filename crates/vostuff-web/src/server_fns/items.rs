@@ -163,6 +163,199 @@ async fn get_auth_token() -> Result<String, ServerFnError<NoCustomError>> {
         .ok_or_else(|| ServerFnError::<NoCustomError>::ServerError("Not authenticated".to_string()))
 }
 
+// Vinyl-specific enums
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VinylSize {
+    #[serde(rename = "12_inch")]
+    TwelveInch,
+    #[serde(rename = "6_inch")]
+    SixInch,
+    Other,
+}
+
+impl VinylSize {
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            VinylSize::TwelveInch => "12\"",
+            VinylSize::SixInch => "6\"",
+            VinylSize::Other => "Other",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VinylSpeed {
+    #[serde(rename = "33")]
+    ThirtyThree,
+    #[serde(rename = "45")]
+    FortyFive,
+    Other,
+}
+
+impl VinylSpeed {
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            VinylSpeed::ThirtyThree => "33 RPM",
+            VinylSpeed::FortyFive => "45 RPM",
+            VinylSpeed::Other => "Other",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VinylChannels {
+    Mono,
+    Stereo,
+    Surround,
+    Other,
+}
+
+impl VinylChannels {
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            VinylChannels::Mono => "Mono",
+            VinylChannels::Stereo => "Stereo",
+            VinylChannels::Surround => "Surround",
+            VinylChannels::Other => "Other",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Grading {
+    Mint,
+    NearMint,
+    Excellent,
+    Good,
+    Fair,
+    Poor,
+}
+
+impl Grading {
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Grading::Mint => "Mint",
+            Grading::NearMint => "Near Mint",
+            Grading::Excellent => "Excellent",
+            Grading::Good => "Good",
+            Grading::Fair => "Fair",
+            Grading::Poor => "Poor",
+        }
+    }
+}
+
+// Detail structs
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VinylDetails {
+    pub item_id: Uuid,
+    pub size: Option<VinylSize>,
+    pub speed: Option<VinylSpeed>,
+    pub channels: Option<VinylChannels>,
+    pub disks: Option<i32>,
+    pub media_grading: Option<Grading>,
+    pub sleeve_grading: Option<Grading>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CdDetails {
+    pub item_id: Uuid,
+    pub disks: Option<i32>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CassetteDetails {
+    pub item_id: Uuid,
+    pub cassettes: Option<i32>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DvdDetails {
+    pub item_id: Uuid,
+    pub disks: Option<i32>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LoanDetails {
+    pub item_id: Uuid,
+    pub date_loaned: chrono::NaiveDate,
+    pub date_due_back: Option<chrono::NaiveDate>,
+    pub loaned_to: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MissingDetails {
+    pub item_id: Uuid,
+    pub date_missing: chrono::NaiveDate,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DisposedDetails {
+    pub item_id: Uuid,
+    pub date_disposed: chrono::NaiveDate,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ItemFullDetails {
+    pub item: Item,
+    pub vinyl_details: Option<VinylDetails>,
+    pub cd_details: Option<CdDetails>,
+    pub cassette_details: Option<CassetteDetails>,
+    pub dvd_details: Option<DvdDetails>,
+    pub loan_details: Option<LoanDetails>,
+    pub missing_details: Option<MissingDetails>,
+    pub disposed_details: Option<DisposedDetails>,
+}
+
+/// Fetch full details for a single item
+#[server(GetItemDetails, "/api")]
+pub async fn get_item_details(
+    org_id: Uuid,
+    item_id: Uuid,
+) -> Result<ItemFullDetails, ServerFnError<NoCustomError>> {
+    let token = get_auth_token().await?;
+
+    let api_base_url =
+        std::env::var("API_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+
+    let url = format!(
+        "{}/api/organizations/{}/items/{}/details",
+        api_base_url, org_id, item_id
+    );
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|e| {
+            ServerFnError::<NoCustomError>::ServerError(format!("API request failed: {}", e))
+        })?;
+
+    if response.status() == 401 {
+        return Err(ServerFnError::<NoCustomError>::ServerError(
+            "Not authenticated".to_string(),
+        ));
+    }
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(ServerFnError::<NoCustomError>::ServerError(format!(
+            "Failed to fetch item details: {} - {}",
+            status, body
+        )));
+    }
+
+    response.json().await.map_err(|e| {
+        ServerFnError::<NoCustomError>::ServerError(format!("Failed to parse response: {}", e))
+    })
+}
+
 /// Filter parameters for items query
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]

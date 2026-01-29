@@ -8,8 +8,10 @@ use uuid::Uuid;
 
 use crate::api::{
     models::{
-        CreateItemRequest, ErrorResponse, Item, ItemFilterParams, ItemState, ItemType,
-        PaginatedResponse, UpdateItemRequest,
+        CassetteDetails, CdDetails, CreateItemRequest, DisposedDetails, DvdDetails, ErrorResponse,
+        Grading, Item, ItemFilterParams, ItemFullDetails, ItemState, ItemType, LoanDetails,
+        MissingDetails, PaginatedResponse, UpdateItemRequest, VinylChannels, VinylDetails,
+        VinylSize, VinylSpeed,
     },
     state::AppState,
 };
@@ -413,7 +415,244 @@ pub async fn delete_item(
     }
 }
 
+/// Get full details for a single item (type-specific and state-specific)
+#[utoipa::path(
+    get,
+    path = "/api/organizations/{org_id}/items/{item_id}/details",
+    params(
+        ("org_id" = Uuid, Path, description = "Organization ID"),
+        ("item_id" = Uuid, Path, description = "Item ID")
+    ),
+    responses(
+        (status = 200, description = "Item full details", body = ItemFullDetails),
+        (status = 404, description = "Item not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "items"
+)]
+pub async fn get_item_details(
+    State(state): State<AppState>,
+    Path((org_id, item_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<ItemFullDetails>, (StatusCode, Json<ErrorResponse>)> {
+    // Fetch the base item
+    let item_row = sqlx::query_as::<_, ItemRow>(
+        "SELECT id, organization_id, item_type::text, state::text, name, description, notes,
+         location_id, date_entered, date_acquired, created_at, updated_at
+         FROM items WHERE id = $1 AND organization_id = $2",
+    )
+    .bind(item_id)
+    .bind(org_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(internal_error)?;
+
+    let item_row = match item_row {
+        Some(row) => row,
+        None => {
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "not_found".to_string(),
+                    message: "Item not found".to_string(),
+                }),
+            ));
+        }
+    };
+
+    let item_type_str = item_row.item_type.clone();
+    let state_str = item_row.state.clone();
+    let item: Item = item_row.into();
+
+    // Fetch type-specific details
+    let vinyl_details = if item_type_str == "vinyl" {
+        sqlx::query_as::<_, VinylDetailsRow>(
+            "SELECT item_id, size::text, speed::text, channels::text, disks, media_grading::text, sleeve_grading::text
+             FROM vinyl_details WHERE item_id = $1",
+        )
+        .bind(item_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(internal_error)?
+        .map(|r| r.into())
+    } else {
+        None
+    };
+
+    let cd_details = if item_type_str == "cd" {
+        sqlx::query_as::<_, CdDetailsRow>(
+            "SELECT item_id, disks FROM cd_details WHERE item_id = $1",
+        )
+        .bind(item_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(internal_error)?
+        .map(|r| CdDetails {
+            item_id: r.item_id,
+            disks: r.disks,
+        })
+    } else {
+        None
+    };
+
+    let cassette_details = if item_type_str == "cassette" {
+        sqlx::query_as::<_, CassetteDetailsRow>(
+            "SELECT item_id, cassettes FROM cassette_details WHERE item_id = $1",
+        )
+        .bind(item_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(internal_error)?
+        .map(|r| CassetteDetails {
+            item_id: r.item_id,
+            cassettes: r.cassettes,
+        })
+    } else {
+        None
+    };
+
+    let dvd_details = if item_type_str == "dvd" {
+        sqlx::query_as::<_, DvdDetailsRow>(
+            "SELECT item_id, disks FROM dvd_details WHERE item_id = $1",
+        )
+        .bind(item_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(internal_error)?
+        .map(|r| DvdDetails {
+            item_id: r.item_id,
+            disks: r.disks,
+        })
+    } else {
+        None
+    };
+
+    // Fetch state-specific details
+    let loan_details = if state_str == "loaned" {
+        sqlx::query_as::<_, LoanDetailsRow>(
+            "SELECT item_id, date_loaned, date_due_back, loaned_to FROM item_loan_details WHERE item_id = $1",
+        )
+        .bind(item_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(internal_error)?
+        .map(|r| LoanDetails {
+            item_id: r.item_id,
+            date_loaned: r.date_loaned,
+            date_due_back: r.date_due_back,
+            loaned_to: r.loaned_to,
+        })
+    } else {
+        None
+    };
+
+    let missing_details = if state_str == "missing" {
+        sqlx::query_as::<_, MissingDetailsRow>(
+            "SELECT item_id, date_missing FROM item_missing_details WHERE item_id = $1",
+        )
+        .bind(item_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(internal_error)?
+        .map(|r| MissingDetails {
+            item_id: r.item_id,
+            date_missing: r.date_missing,
+        })
+    } else {
+        None
+    };
+
+    let disposed_details = if state_str == "disposed" {
+        sqlx::query_as::<_, DisposedDetailsRow>(
+            "SELECT item_id, date_disposed FROM item_disposed_details WHERE item_id = $1",
+        )
+        .bind(item_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(internal_error)?
+        .map(|r| DisposedDetails {
+            item_id: r.item_id,
+            date_disposed: r.date_disposed,
+        })
+    } else {
+        None
+    };
+
+    Ok(Json(ItemFullDetails {
+        item,
+        vinyl_details,
+        cd_details,
+        cassette_details,
+        dvd_details,
+        loan_details,
+        missing_details,
+        disposed_details,
+    }))
+}
+
 // Helper structs and functions
+
+#[derive(sqlx::FromRow)]
+struct VinylDetailsRow {
+    item_id: Uuid,
+    size: Option<String>,
+    speed: Option<String>,
+    channels: Option<String>,
+    disks: Option<i32>,
+    media_grading: Option<String>,
+    sleeve_grading: Option<String>,
+}
+
+impl From<VinylDetailsRow> for VinylDetails {
+    fn from(row: VinylDetailsRow) -> Self {
+        VinylDetails {
+            item_id: row.item_id,
+            size: row.size.and_then(|s| db_to_vinyl_size(&s)),
+            speed: row.speed.and_then(|s| db_to_vinyl_speed(&s)),
+            channels: row.channels.and_then(|s| db_to_vinyl_channels(&s)),
+            disks: row.disks,
+            media_grading: row.media_grading.and_then(|s| db_to_grading(&s)),
+            sleeve_grading: row.sleeve_grading.and_then(|s| db_to_grading(&s)),
+        }
+    }
+}
+
+#[derive(sqlx::FromRow)]
+struct CdDetailsRow {
+    item_id: Uuid,
+    disks: Option<i32>,
+}
+
+#[derive(sqlx::FromRow)]
+struct CassetteDetailsRow {
+    item_id: Uuid,
+    cassettes: Option<i32>,
+}
+
+#[derive(sqlx::FromRow)]
+struct DvdDetailsRow {
+    item_id: Uuid,
+    disks: Option<i32>,
+}
+
+#[derive(sqlx::FromRow)]
+struct LoanDetailsRow {
+    item_id: Uuid,
+    date_loaned: chrono::NaiveDate,
+    date_due_back: Option<chrono::NaiveDate>,
+    loaned_to: String,
+}
+
+#[derive(sqlx::FromRow)]
+struct MissingDetailsRow {
+    item_id: Uuid,
+    date_missing: chrono::NaiveDate,
+}
+
+#[derive(sqlx::FromRow)]
+struct DisposedDetailsRow {
+    item_id: Uuid,
+    date_disposed: chrono::NaiveDate,
+}
 
 #[derive(sqlx::FromRow)]
 struct ItemRow {
@@ -493,6 +732,46 @@ fn item_state_to_db(s: &ItemState) -> String {
         ItemState::Loaned => "loaned".to_string(),
         ItemState::Missing => "missing".to_string(),
         ItemState::Disposed => "disposed".to_string(),
+    }
+}
+
+fn db_to_vinyl_size(s: &str) -> Option<VinylSize> {
+    match s {
+        "12_inch" => Some(VinylSize::TwelveInch),
+        "6_inch" => Some(VinylSize::SixInch),
+        "other" => Some(VinylSize::Other),
+        _ => None,
+    }
+}
+
+fn db_to_vinyl_speed(s: &str) -> Option<VinylSpeed> {
+    match s {
+        "33" => Some(VinylSpeed::ThirtyThree),
+        "45" => Some(VinylSpeed::FortyFive),
+        "other" => Some(VinylSpeed::Other),
+        _ => None,
+    }
+}
+
+fn db_to_vinyl_channels(s: &str) -> Option<VinylChannels> {
+    match s {
+        "mono" => Some(VinylChannels::Mono),
+        "stereo" => Some(VinylChannels::Stereo),
+        "surround" => Some(VinylChannels::Surround),
+        "other" => Some(VinylChannels::Other),
+        _ => None,
+    }
+}
+
+fn db_to_grading(s: &str) -> Option<Grading> {
+    match s {
+        "mint" => Some(Grading::Mint),
+        "near_mint" => Some(Grading::NearMint),
+        "excellent" => Some(Grading::Excellent),
+        "good" => Some(Grading::Good),
+        "fair" => Some(Grading::Fair),
+        "poor" => Some(Grading::Poor),
+        _ => None,
     }
 }
 

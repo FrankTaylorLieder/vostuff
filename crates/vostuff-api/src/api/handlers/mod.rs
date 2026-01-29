@@ -25,6 +25,10 @@ pub fn build_router(state: AppState) -> Router {
             get(items::get_item),
         )
         .route(
+            "/organizations/:org_id/items/:item_id/details",
+            get(items::get_item_details),
+        )
+        .route(
             "/organizations/:org_id/items/:item_id",
             patch(items::update_item),
         )
