@@ -1,5 +1,6 @@
 use crate::auth::PasswordHasher;
 use anyhow::Result;
+use serde_json::{Value, json};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
@@ -201,42 +202,60 @@ impl<'a> SampleDataLoader<'a> {
         Ok(())
     }
 
+    async fn get_kind_id(&self, name: &str) -> Result<Uuid> {
+        let row = sqlx::query("SELECT id FROM kinds WHERE name = $1 AND org_id IS NULL")
+            .bind(name)
+            .fetch_one(self.pool)
+            .await?;
+        Ok(row.get("id"))
+    }
+
     async fn create_items_for_org(
         &self,
         org_id: Uuid,
         locations: &[Uuid],
         collections: &[Uuid],
     ) -> Result<()> {
+        // Look up shared kind IDs once
+        let vinyl_kind = self.get_kind_id("vinyl").await?;
+        let cd_kind = self.get_kind_id("cd").await?;
+        let cassette_kind = self.get_kind_id("cassette").await?;
+        let book_kind = self.get_kind_id("book").await?;
+        let score_kind = self.get_kind_id("score").await?;
+        let electronics_kind = self.get_kind_id("electronics").await?;
+        let misc_kind = self.get_kind_id("misc").await?;
+        let dvd_kind = self.get_kind_id("dvd").await?;
+
         // Vinyl records (10 items)
-        self.create_vinyl_items(org_id, locations, collections)
+        self.create_vinyl_items(org_id, vinyl_kind, locations, collections)
             .await?;
 
         // CDs (10 items)
-        self.create_cd_items(org_id, locations, collections).await?;
+        self.create_cd_items(org_id, cd_kind, locations, collections)
+            .await?;
 
         // Cassettes (8 items)
-        self.create_cassette_items(org_id, locations, collections)
+        self.create_cassette_items(org_id, cassette_kind, locations)
             .await?;
 
         // Books (8 items)
-        self.create_book_items(org_id, locations, collections)
+        self.create_book_items(org_id, book_kind, locations, collections)
             .await?;
 
         // Scores (6 items)
-        self.create_score_items(org_id, locations, collections)
+        self.create_score_items(org_id, score_kind, locations)
             .await?;
 
         // Electronics (4 items)
-        self.create_electronics_items(org_id, locations, collections)
+        self.create_electronics_items(org_id, electronics_kind, locations)
             .await?;
 
         // Misc (4 items)
-        self.create_misc_items(org_id, locations, collections)
+        self.create_misc_items(org_id, misc_kind, locations, collections)
             .await?;
 
         // DVDs (6 items)
-        self.create_dvd_items(org_id, locations, collections)
-            .await?;
+        self.create_dvd_items(org_id, dvd_kind, locations).await?;
 
         Ok(())
     }
@@ -244,6 +263,7 @@ impl<'a> SampleDataLoader<'a> {
     async fn create_vinyl_items(
         &self,
         org_id: Uuid,
+        kind_id: Uuid,
         locations: &[Uuid],
         collections: &[Uuid],
     ) -> Result<()> {
@@ -354,39 +374,31 @@ impl<'a> SampleDataLoader<'a> {
             vinyl_data.iter().enumerate()
         {
             let location_id = locations[idx % locations.len()];
+            let soft_fields = json!({
+                "size": size,
+                "speed": speed,
+                "channels": channels,
+                "disks": disks,
+                "media_grading": media_grading,
+                "sleeve_grading": sleeve_grading,
+            });
             let item_id = self
                 .create_item(
                     org_id,
-                    "vinyl",
+                    kind_id,
                     state,
                     name,
                     &format!("A classic vinyl record: {}", name),
                     location_id,
+                    soft_fields,
                 )
                 .await?;
 
-            // Add vinyl details
-            sqlx::query(
-                "INSERT INTO vinyl_details (item_id, size, speed, channels, disks, media_grading, sleeve_grading)
-                 VALUES ($1, $2::vinyl_size, $3::vinyl_speed, $4::vinyl_channels, $5, $6::grading, $7::grading)"
-            )
-            .bind(item_id)
-            .bind(*size)
-            .bind(*speed)
-            .bind(*channels)
-            .bind(*disks)
-            .bind(*media_grading)
-            .bind(*sleeve_grading)
-            .execute(self.pool)
-            .await?;
-
-            // Add to collection
             if idx % 3 == 0 && !collections.is_empty() {
                 self.add_item_to_collection(item_id, collections[idx % collections.len()])
                     .await?;
             }
 
-            // Add state details
             match *state {
                 "loaned" => {
                     sqlx::query!(
@@ -416,7 +428,6 @@ impl<'a> SampleDataLoader<'a> {
                 _ => {}
             }
 
-            // Add some tags
             if idx % 2 == 0 {
                 self.add_tag_to_item(item_id, org_id, "vintage").await?;
             }
@@ -432,6 +443,7 @@ impl<'a> SampleDataLoader<'a> {
     async fn create_cd_items(
         &self,
         org_id: Uuid,
+        kind_id: Uuid,
         locations: &[Uuid],
         collections: &[Uuid],
     ) -> Result<()> {
@@ -450,24 +462,18 @@ impl<'a> SampleDataLoader<'a> {
 
         for (idx, (name, disks, state)) in cd_data.iter().enumerate() {
             let location_id = locations[idx % locations.len()];
+            let soft_fields = json!({ "disks": disks });
             let item_id = self
                 .create_item(
                     org_id,
-                    "cd",
+                    kind_id,
                     state,
                     name,
                     &format!("CD: {}", name),
                     location_id,
+                    soft_fields,
                 )
                 .await?;
-
-            sqlx::query!(
-                "INSERT INTO cd_details (item_id, disks) VALUES ($1, $2)",
-                item_id,
-                *disks
-            )
-            .execute(self.pool)
-            .await?;
 
             if idx % 2 == 0 && !collections.is_empty() {
                 self.add_item_to_collection(item_id, collections[0]).await?;
@@ -502,8 +508,8 @@ impl<'a> SampleDataLoader<'a> {
     async fn create_cassette_items(
         &self,
         org_id: Uuid,
+        kind_id: Uuid,
         locations: &[Uuid],
-        _collections: &[Uuid],
     ) -> Result<()> {
         let cassette_data = vec![
             ("Appetite for Destruction - Guns N' Roses", 1, "current"),
@@ -518,24 +524,18 @@ impl<'a> SampleDataLoader<'a> {
 
         for (idx, (name, cassettes, state)) in cassette_data.iter().enumerate() {
             let location_id = locations[idx % locations.len()];
+            let soft_fields = json!({ "cassettes": cassettes });
             let item_id = self
                 .create_item(
                     org_id,
-                    "cassette",
+                    kind_id,
                     state,
                     name,
                     &format!("Cassette tape: {}", name),
                     location_id,
+                    soft_fields,
                 )
                 .await?;
-
-            sqlx::query!(
-                "INSERT INTO cassette_details (item_id, cassettes) VALUES ($1, $2)",
-                item_id,
-                *cassettes
-            )
-            .execute(self.pool)
-            .await?;
 
             if *state == "disposed" {
                 sqlx::query!(
@@ -554,6 +554,7 @@ impl<'a> SampleDataLoader<'a> {
     async fn create_book_items(
         &self,
         org_id: Uuid,
+        kind_id: Uuid,
         locations: &[Uuid],
         collections: &[Uuid],
     ) -> Result<()> {
@@ -573,11 +574,12 @@ impl<'a> SampleDataLoader<'a> {
             let item_id = self
                 .create_item(
                     org_id,
-                    "book",
+                    kind_id,
                     state,
                     name,
                     &format!("Book: {}", name),
                     location_id,
+                    json!({}),
                 )
                 .await?;
 
@@ -607,8 +609,8 @@ impl<'a> SampleDataLoader<'a> {
     async fn create_score_items(
         &self,
         org_id: Uuid,
+        kind_id: Uuid,
         locations: &[Uuid],
-        _collections: &[Uuid],
     ) -> Result<()> {
         let score_data = vec![
             ("Beethoven - Symphony No. 9", "current"),
@@ -624,11 +626,12 @@ impl<'a> SampleDataLoader<'a> {
             let item_id = self
                 .create_item(
                     org_id,
-                    "score",
+                    kind_id,
                     state,
                     name,
                     &format!("Musical score: {}", name),
                     location_id,
+                    json!({}),
                 )
                 .await?;
 
@@ -644,8 +647,8 @@ impl<'a> SampleDataLoader<'a> {
     async fn create_electronics_items(
         &self,
         org_id: Uuid,
+        kind_id: Uuid,
         locations: &[Uuid],
-        _collections: &[Uuid],
     ) -> Result<()> {
         let electronics_data = vec![
             ("Technics SL-1200 Turntable", "current"),
@@ -659,11 +662,12 @@ impl<'a> SampleDataLoader<'a> {
             let item_id = self
                 .create_item(
                     org_id,
-                    "electronics",
+                    kind_id,
                     state,
                     name,
                     &format!("Electronics: {}", name),
                     location_id,
+                    json!({}),
                 )
                 .await?;
 
@@ -688,6 +692,7 @@ impl<'a> SampleDataLoader<'a> {
     async fn create_misc_items(
         &self,
         org_id: Uuid,
+        kind_id: Uuid,
         locations: &[Uuid],
         collections: &[Uuid],
     ) -> Result<()> {
@@ -703,11 +708,12 @@ impl<'a> SampleDataLoader<'a> {
             let item_id = self
                 .create_item(
                     org_id,
-                    "misc",
+                    kind_id,
                     state,
                     name,
                     &format!("Miscellaneous item: {}", name),
                     location_id,
+                    json!({}),
                 )
                 .await?;
 
@@ -728,8 +734,8 @@ impl<'a> SampleDataLoader<'a> {
     async fn create_dvd_items(
         &self,
         org_id: Uuid,
+        kind_id: Uuid,
         locations: &[Uuid],
-        _collections: &[Uuid],
     ) -> Result<()> {
         let dvd_data = vec![
             (
@@ -746,24 +752,18 @@ impl<'a> SampleDataLoader<'a> {
 
         for (idx, (name, disks, state)) in dvd_data.iter().enumerate() {
             let location_id = locations[idx % locations.len()];
+            let soft_fields = json!({ "disks": disks });
             let item_id = self
                 .create_item(
                     org_id,
-                    "dvd",
+                    kind_id,
                     state,
                     name,
                     &format!("DVD: {}", name),
                     location_id,
+                    soft_fields,
                 )
                 .await?;
-
-            sqlx::query!(
-                "INSERT INTO dvd_details (item_id, disks) VALUES ($1, $2)",
-                item_id,
-                *disks
-            )
-            .execute(self.pool)
-            .await?;
 
             if *state == "loaned" {
                 sqlx::query!(
@@ -783,24 +783,26 @@ impl<'a> SampleDataLoader<'a> {
     async fn create_item(
         &self,
         org_id: Uuid,
-        item_type: &str,
+        kind_id: Uuid,
         state: &str,
         name: &str,
         description: &str,
         location_id: Uuid,
+        soft_fields: Value,
     ) -> Result<Uuid> {
         let row = sqlx::query(
             r#"INSERT INTO items
-            (organization_id, item_type, state, name, description, location_id, date_acquired)
-            VALUES ($1, $2::item_type, $3::item_state, $4, $5, $6, CURRENT_DATE - (random() * 365)::int)
-            RETURNING id"#
+            (organization_id, kind_id, state, name, description, location_id, date_acquired, soft_fields)
+            VALUES ($1, $2, $3::item_state, $4, $5, $6, CURRENT_DATE - (random() * 365)::int, $7)
+            RETURNING id"#,
         )
         .bind(org_id)
-        .bind(item_type)
+        .bind(kind_id)
         .bind(state)
         .bind(name)
         .bind(description)
         .bind(location_id)
+        .bind(soft_fields)
         .fetch_one(self.pool)
         .await?;
 
