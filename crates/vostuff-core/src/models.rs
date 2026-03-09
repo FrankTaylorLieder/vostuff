@@ -1,24 +1,9 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "server")]
+use serde_json::Value;
 #[cfg(feature = "server")]
 use utoipa::ToSchema;
 use uuid::Uuid;
-
-// Item types
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "server", derive(ToSchema))]
-#[serde(rename_all = "snake_case")]
-pub enum ItemType {
-    Vinyl,
-    Cd,
-    Cassette,
-    Book,
-    Score,
-    Electronics,
-    Misc,
-    Dvd,
-}
 
 // Item states
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -31,58 +16,14 @@ pub enum ItemState {
     Disposed,
 }
 
-// Vinyl specific enums
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "server", derive(ToSchema))]
-#[serde(rename_all = "snake_case")]
-pub enum VinylSize {
-    #[serde(rename = "12_inch")]
-    TwelveInch,
-    #[serde(rename = "6_inch")]
-    SixInch,
-    Other,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "server", derive(ToSchema))]
-#[serde(rename_all = "snake_case")]
-pub enum VinylSpeed {
-    #[serde(rename = "33")]
-    ThirtyThree,
-    #[serde(rename = "45")]
-    FortyFive,
-    Other,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "server", derive(ToSchema))]
-#[serde(rename_all = "snake_case")]
-pub enum VinylChannels {
-    Mono,
-    Stereo,
-    Surround,
-    Other,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "server", derive(ToSchema))]
-#[serde(rename_all = "snake_case")]
-pub enum Grading {
-    Mint,
-    NearMint,
-    Excellent,
-    Good,
-    Fair,
-    Poor,
-}
-
 // Item response
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct Item {
     pub id: Uuid,
     pub organization_id: Uuid,
-    pub item_type: ItemType,
+    pub kind_id: Uuid,
+    pub kind_name: String,
     pub state: ItemState,
     pub name: String,
     pub description: Option<String>,
@@ -90,6 +31,7 @@ pub struct Item {
     pub location_id: Option<Uuid>,
     pub date_entered: DateTime<Utc>,
     pub date_acquired: Option<NaiveDate>,
+    pub soft_fields: Value,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -98,12 +40,13 @@ pub struct Item {
 #[derive(Debug, Deserialize)]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct CreateItemRequest {
-    pub item_type: ItemType,
+    pub kind_id: Uuid,
     pub name: String,
     pub description: Option<String>,
     pub notes: Option<String>,
     pub location_id: Option<Uuid>,
     pub date_acquired: Option<NaiveDate>,
+    pub soft_fields: Option<Value>,
 }
 
 // Update item request
@@ -116,19 +59,9 @@ pub struct UpdateItemRequest {
     pub location_id: Option<Uuid>,
     pub date_acquired: Option<NaiveDate>,
     pub state: Option<ItemState>,
-    // Vinyl details
-    pub vinyl_size: Option<String>,
-    pub vinyl_speed: Option<String>,
-    pub vinyl_channels: Option<String>,
-    pub vinyl_disks: Option<i32>,
-    pub vinyl_media_grading: Option<String>,
-    pub vinyl_sleeve_grading: Option<String>,
-    // CD details
-    pub cd_disks: Option<i32>,
-    // DVD details
-    pub dvd_disks: Option<i32>,
-    // Cassette details
-    pub cassette_cassettes: Option<i32>,
+    /// Soft field values to merge into the item's existing soft_fields.
+    /// Keys present will overwrite existing values; absent keys are unchanged.
+    pub soft_fields: Option<Value>,
     // Loan details
     pub loan_date_loaned: Option<NaiveDate>,
     pub loan_date_due_back: Option<NaiveDate>,
@@ -137,43 +70,6 @@ pub struct UpdateItemRequest {
     pub missing_date_missing: Option<NaiveDate>,
     // Disposed details
     pub disposed_date_disposed: Option<NaiveDate>,
-}
-
-// Vinyl details
-#[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(ToSchema))]
-pub struct VinylDetails {
-    pub item_id: Uuid,
-    pub size: Option<VinylSize>,
-    pub speed: Option<VinylSpeed>,
-    pub channels: Option<VinylChannels>,
-    pub disks: Option<i32>,
-    pub media_grading: Option<Grading>,
-    pub sleeve_grading: Option<Grading>,
-}
-
-// CD details
-#[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(ToSchema))]
-pub struct CdDetails {
-    pub item_id: Uuid,
-    pub disks: Option<i32>,
-}
-
-// Cassette details
-#[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(ToSchema))]
-pub struct CassetteDetails {
-    pub item_id: Uuid,
-    pub cassettes: Option<i32>,
-}
-
-// DVD details
-#[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(ToSchema))]
-pub struct DvdDetails {
-    pub item_id: Uuid,
-    pub disks: Option<i32>,
 }
 
 // Loan state details
@@ -202,15 +98,12 @@ pub struct DisposedDetails {
     pub date_disposed: NaiveDate,
 }
 
-// Full item details including type-specific and state-specific data
+// Full item details including state-specific data.
+// Soft field values are already included in item.soft_fields.
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(ToSchema))]
 pub struct ItemFullDetails {
     pub item: Item,
-    pub vinyl_details: Option<VinylDetails>,
-    pub cd_details: Option<CdDetails>,
-    pub cassette_details: Option<CassetteDetails>,
-    pub dvd_details: Option<DvdDetails>,
     pub loan_details: Option<LoanDetails>,
     pub missing_details: Option<MissingDetails>,
     pub disposed_details: Option<DisposedDetails>,
@@ -471,15 +364,15 @@ pub struct ItemFilterParams {
     pub page: i64,
     #[serde(default = "default_per_page")]
     pub per_page: i64,
-    /// Filter by item types (comma-separated, e.g., "vinyl,cd,book")
-    pub item_type: Option<String>,
+    /// Filter by kind names (comma-separated, e.g., "vinyl,cd,book")
+    pub kind: Option<String>,
     /// Filter by item states (comma-separated, e.g., "current,loaned")
     pub state: Option<String>,
     /// Filter by location IDs (comma-separated UUIDs)
     pub location_id: Option<String>,
     /// Text search across name, description, and notes (ILIKE)
     pub search: Option<String>,
-    /// Sort by column (name, item_type, state, location_id, created_at)
+    /// Sort by column (name, kind, state, location_id, created_at)
     pub sort_by: Option<String>,
     /// Sort direction (asc, desc)
     pub sort_order: Option<String>,

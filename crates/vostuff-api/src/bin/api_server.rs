@@ -57,9 +57,8 @@ use vostuff_api::api::{
     ),
     components(
         schemas(
-            Item, ItemType, ItemState,
+            Item, ItemState,
             CreateItemRequest, UpdateItemRequest,
-            VinylDetails, VinylSize, VinylSpeed, VinylChannels, Grading,
             Location, CreateLocationRequest,
             Collection, CreateCollectionRequest,
             Tag, CreateTagRequest,
