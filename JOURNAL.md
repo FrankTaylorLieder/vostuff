@@ -1,5 +1,60 @@
 # VOStuff Project Journal
 
+## 2026-03-09 - Soft Fields Schema, API, and Sample Data Migration
+
+**Prompts:**
+- "Can you examine this project and tell me the fields and types which are defined in the resource types."
+- "Can you review the soft-fields-design.md. Does it specify enough to start implementing this design change? If not, can you enumerate the up-front decisions that need to be recorded here?"
+- "Can you search on the content of JSONB field?"
+- "I have updated the doc, are there any critical outstanding issues."
+- "Updates made." (x2)
+- "Enough now?"
+- "Can you commit the doc in the branch I've just created."
+- "Let's implement the soft fields change. We'll start with the changes to the SQL schema. Can you propose the new schema."
+- "Looks good. Please implement."
+- "Can you now update the sample data creation to match the new schema."
+- "Next, update the API and its backend to use these soft fields."
+- "Can we write a TODO.md file of the all the remaining changes needed to complete the migration. Include: adding APIs to manage the soft fields and kinds. Updating the UI to support soft fields and kinds, as well as editing them."
+
+**Summary:**
+
+Iterated on the soft fields design document (`docs/soft-fields-design.md`),
+identifying and resolving all up-front architectural decisions before
+implementation. Key decisions recorded: JSONB storage for soft field values,
+field names as immutable JSONB keys, NULL org_id for shared kinds/fields,
+kind_id UUID FK replacing item_type enum, all soft fields optional, type and
+enum validation in the API, direct cutover (no parallel period).
+
+Implemented the soft fields schema migration:
+
+- **Migration** (`migrations/20260309000000_soft_fields.sql`): creates `kinds`,
+  `fields`, `enum_values`, `kind_fields` tables; adds `kind_id` and
+  `soft_fields` JSONB to `items`; seeds all 8 shared kinds and 7 shared fields
+  with enum values; migrates existing item data from detail tables to JSONB;
+  drops `vinyl_details`, `cd_details`, `dvd_details`, `cassette_details`,
+  `item_type` column, and old PG enums.
+
+- **Sample data** (`crates/vostuff-api/src/test_utils.rs`): updated to look up
+  kind IDs by name at runtime and build `soft_fields` JSON inline; removed all
+  detail table inserts.
+
+- **Models** (`crates/vostuff-core/src/models.rs`): removed `ItemType`,
+  `VinylSize`, `VinylSpeed`, `VinylChannels`, `Grading` enums and all
+  per-type detail structs; `Item` now has `kind_id`, `kind_name`,
+  `soft_fields`; `CreateItemRequest` takes `kind_id` + optional `soft_fields`;
+  `UpdateItemRequest` has a single `soft_fields` merge field; `ItemFilterParams`
+  `item_type` renamed to `kind`.
+
+- **API handler** (`crates/vostuff-api/src/api/handlers/items.rs`): all queries
+  JOIN kinds table; `create_item` validates kind and soft field types/enum
+  values; `update_item` merges soft_fields with JSONB `||` operator; new
+  `validate_soft_fields` helper enforces types and enum allowed values; removed
+  all type-specific detail table logic.
+
+- **TODO.md**: written with all remaining work to complete the migration,
+  including kinds/fields management APIs, UI updates, CLZ importer update,
+  and integration test fixes.
+
 ## 2026-01-29 - Inline Edit for Expanded Item Row (All Fields) + Polish
 
 **Prompts:**
