@@ -5,8 +5,7 @@ use uuid::Uuid;
 use pulldown_cmark::{Options, Parser, html};
 
 use crate::server_fns::items::{
-    Grading, Item, ItemFullDetails, ItemState, ItemType, Location, UpdateItemRequest,
-    VinylChannels, VinylSize, VinylSpeed, get_item_details, update_item,
+    Item, ItemFullDetails, ItemState, Location, UpdateItemRequest, get_item_details, update_item,
 };
 
 fn render_markdown(text: &str) -> String {
@@ -106,12 +105,12 @@ pub fn ItemsTable(
         }
     };
 
-    let on_type = make_sort_handler("item_type");
+    let on_type = make_sort_handler("kind");
     let on_name = make_sort_handler("name");
     let on_state = make_sort_handler("state");
     let on_location = make_sort_handler("location_id");
 
-    let ind_type = sort_indicator("item_type");
+    let ind_type = sort_indicator("kind");
     let ind_name = sort_indicator("name");
     let ind_state = sort_indicator("state");
     let ind_location = sort_indicator("location_id");
@@ -145,7 +144,7 @@ pub fn ItemsTable(
                                 class:expanded=is_expanded
                                 on:click=move |_| toggle_row(item_id)
                             >
-                                <td class="col-type">{item.item_type.display_name()}</td>
+                                <td class="col-type">{item.kind_name.clone()}</td>
                                 <td class="col-name">{highlight_match(&item.name, &sq)}</td>
                                 <td class="col-state">
                                     <span class=format!("state-badge {}", item.state.css_class())>
@@ -172,117 +171,59 @@ pub fn ItemsTable(
     }
 }
 
-fn render_type_details(details: &ItemFullDetails) -> View {
-    if let Some(ref vd) = details.vinyl_details {
-        let size = vd.size.as_ref().map(|s| s.display_name()).unwrap_or("-");
-        let speed = vd.speed.as_ref().map(|s| s.display_name()).unwrap_or("-");
-        let channels = vd
-            .channels
-            .as_ref()
-            .map(|c| c.display_name())
-            .unwrap_or("-");
-        let disks = vd
-            .disks
-            .map(|d| d.to_string())
-            .unwrap_or_else(|| "-".to_string());
-        let media = vd
-            .media_grading
-            .as_ref()
-            .map(|g| g.display_name())
-            .unwrap_or("-");
-        let sleeve = vd
-            .sleeve_grading
-            .as_ref()
-            .map(|g| g.display_name())
-            .unwrap_or("-");
-        view! {
-            <div class="detail-section">
-                <h4>"Vinyl Details"</h4>
-                <div class="detail-row">
-                    <div class="detail-group">
-                        <span class="detail-label">"Size:"</span>
-                        <span class="detail-value">{size}</span>
-                    </div>
-                    <div class="detail-group">
-                        <span class="detail-label">"Speed:"</span>
-                        <span class="detail-value">{speed}</span>
-                    </div>
-                    <div class="detail-group">
-                        <span class="detail-label">"Channels:"</span>
-                        <span class="detail-value">{channels}</span>
-                    </div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-group">
-                        <span class="detail-label">"Disks:"</span>
-                        <span class="detail-value">{disks}</span>
-                    </div>
-                    <div class="detail-group">
-                        <span class="detail-label">"Media Grading:"</span>
-                        <span class="detail-value">{media}</span>
-                    </div>
-                    <div class="detail-group">
-                        <span class="detail-label">"Sleeve Grading:"</span>
-                        <span class="detail-value">{sleeve}</span>
-                    </div>
-                </div>
-            </div>
-        }
-        .into_view()
-    } else if let Some(ref cd) = details.cd_details {
-        let disks = cd
-            .disks
-            .map(|d| d.to_string())
-            .unwrap_or_else(|| "-".to_string());
-        view! {
-            <div class="detail-section">
-                <h4>"CD Details"</h4>
-                <div class="detail-row">
-                    <div class="detail-group">
-                        <span class="detail-label">"Disks:"</span>
-                        <span class="detail-value">{disks}</span>
-                    </div>
-                </div>
-            </div>
-        }
-        .into_view()
-    } else if let Some(ref cas) = details.cassette_details {
-        let cassettes = cas
-            .cassettes
-            .map(|c| c.to_string())
-            .unwrap_or_else(|| "-".to_string());
-        view! {
-            <div class="detail-section">
-                <h4>"Cassette Details"</h4>
-                <div class="detail-row">
-                    <div class="detail-group">
-                        <span class="detail-label">"Cassettes:"</span>
-                        <span class="detail-value">{cassettes}</span>
-                    </div>
-                </div>
-            </div>
-        }
-        .into_view()
-    } else if let Some(ref dvd) = details.dvd_details {
-        let disks = dvd
-            .disks
-            .map(|d| d.to_string())
-            .unwrap_or_else(|| "-".to_string());
-        view! {
-            <div class="detail-section">
-                <h4>"DVD Details"</h4>
-                <div class="detail-row">
-                    <div class="detail-group">
-                        <span class="detail-label">"Disks:"</span>
-                        <span class="detail-value">{disks}</span>
-                    </div>
-                </div>
-            </div>
-        }
-        .into_view()
-    } else {
-        ().into_view()
+fn value_to_edit_str(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Number(n) => n.to_string(),
+        serde_json::Value::Bool(b) => b.to_string(),
+        serde_json::Value::Null => String::new(),
+        _ => v.to_string(),
     }
+}
+
+fn format_field_name(name: &str) -> String {
+    name.split('_')
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn render_soft_fields(soft_fields: &serde_json::Value) -> View {
+    let Some(obj) = soft_fields.as_object() else {
+        return ().into_view();
+    };
+    if obj.is_empty() {
+        return ().into_view();
+    }
+    let fields: Vec<(String, String)> = obj
+        .iter()
+        .map(|(k, v)| (format_field_name(k), value_to_edit_str(v)))
+        .collect();
+    view! {
+        <div class="detail-section">
+            <h4>"Details"</h4>
+            <div class="detail-row">
+                {fields
+                    .into_iter()
+                    .map(|(key, value)| {
+                        view! {
+                            <div class="detail-group">
+                                <span class="detail-label">{key + ":"}</span>
+                                <span class="detail-value">{value}</span>
+                            </div>
+                        }
+                    })
+                    .collect_view()}
+            </div>
+        </div>
+    }
+    .into_view()
 }
 
 fn render_state_details(details: &ItemFullDetails) -> View {
@@ -356,7 +297,6 @@ fn ItemExpandedRow(
     on_item_updated: Callback<()>,
 ) -> impl IntoView {
     let item_id = item.id;
-    let item_type = item.item_type.clone();
     let date_acquired = item
         .date_acquired
         .map(|d| d.format("%Y-%m-%d").to_string())
@@ -383,18 +323,20 @@ fn ItemExpandedRow(
             .unwrap_or_default(),
     );
 
-    // Vinyl signals
-    let (edit_vinyl_size, set_edit_vinyl_size) = create_signal(String::new());
-    let (edit_vinyl_speed, set_edit_vinyl_speed) = create_signal(String::new());
-    let (edit_vinyl_channels, set_edit_vinyl_channels) = create_signal(String::new());
-    let (edit_vinyl_disks, set_edit_vinyl_disks) = create_signal(String::new());
-    let (edit_vinyl_media_grading, set_edit_vinyl_media_grading) = create_signal(String::new());
-    let (edit_vinyl_sleeve_grading, set_edit_vinyl_sleeve_grading) = create_signal(String::new());
-
-    // CD/DVD/Cassette signals
-    let (edit_cd_disks, set_edit_cd_disks) = create_signal(String::new());
-    let (edit_dvd_disks, set_edit_dvd_disks) = create_signal(String::new());
-    let (edit_cassette_cassettes, set_edit_cassette_cassettes) = create_signal(String::new());
+    // Soft field signals — one per entry in item.soft_fields
+    let soft_field_entries: Vec<(String, ReadSignal<String>, WriteSignal<String>)> = item
+        .soft_fields
+        .as_object()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(k, v)| {
+            let (r, w) = create_signal(value_to_edit_str(&v));
+            (k, r, w)
+        })
+        .collect();
+    let soft_field_entries = store_value(soft_field_entries);
+    let orig_soft_fields = store_value(item.soft_fields.clone());
 
     // Loan signals
     let (edit_loan_date_loaned, set_edit_loan_date_loaned) = create_signal(String::new());
@@ -418,23 +360,11 @@ fn ItemExpandedRow(
     // Initialize edit signals from details when entering edit mode
     let init_edit_from_details = move || {
         if let Some(details) = fetched_details.get() {
-            if let Some(ref vd) = details.vinyl_details {
-                set_edit_vinyl_size.set(vinyl_size_to_str(&vd.size));
-                set_edit_vinyl_speed.set(vinyl_speed_to_str(&vd.speed));
-                set_edit_vinyl_channels.set(vinyl_channels_to_str(&vd.channels));
-                set_edit_vinyl_disks.set(vd.disks.map(|d| d.to_string()).unwrap_or_default());
-                set_edit_vinyl_media_grading.set(grading_to_str(&vd.media_grading));
-                set_edit_vinyl_sleeve_grading.set(grading_to_str(&vd.sleeve_grading));
-            }
-            if let Some(ref cd) = details.cd_details {
-                set_edit_cd_disks.set(cd.disks.map(|d| d.to_string()).unwrap_or_default());
-            }
-            if let Some(ref dvd) = details.dvd_details {
-                set_edit_dvd_disks.set(dvd.disks.map(|d| d.to_string()).unwrap_or_default());
-            }
-            if let Some(ref cas) = details.cassette_details {
-                set_edit_cassette_cassettes
-                    .set(cas.cassettes.map(|c| c.to_string()).unwrap_or_default());
+            if let Some(obj) = details.item.soft_fields.as_object() {
+                for (k, _, set_w) in soft_field_entries.get_value().iter() {
+                    let val = obj.get(k).map(value_to_edit_str).unwrap_or_default();
+                    set_w.set(val);
+                }
             }
             if let Some(ref loan) = details.loan_details {
                 set_edit_loan_date_loaned.set(loan.date_loaned.format("%Y-%m-%d").to_string());
@@ -467,27 +397,47 @@ fn ItemExpandedRow(
             .map(|d| d.format("%Y-%m-%d").to_string())
             .unwrap_or_default(),
     );
+
     let cancel_edit = move || {
         set_edit_name.set(orig_name.get_value());
         set_edit_description.set(orig_description.get_value());
         set_edit_notes.set(orig_notes.get_value());
         set_edit_location_id.set(orig_location_id.get_value());
         set_edit_date_acquired.set(orig_date_acquired.get_value());
+        if let Some(obj) = orig_soft_fields.get_value().as_object() {
+            for (k, _, set_w) in soft_field_entries.get_value().iter() {
+                let val = obj.get(k).map(value_to_edit_str).unwrap_or_default();
+                set_w.set(val);
+            }
+        }
         init_edit_from_details();
         set_editing.set(false);
     };
 
-    let item_type_for_save = store_value(item_type.clone());
     let item_state_for_save = store_value(item.state.clone());
 
     let save_action = create_action(move |_: &()| {
-        let it = item_type_for_save.get_value();
         let is = item_state_for_save.get_value();
         let name = edit_name.get();
         let description = edit_description.get();
         let notes = edit_notes.get();
         let location_str = edit_location_id.get();
         let date_acq_str = edit_date_acquired.get();
+
+        // Collect soft fields
+        let sf_map: serde_json::Map<String, serde_json::Value> = soft_field_entries
+            .get_value()
+            .iter()
+            .map(|(k, r, _)| {
+                let s = r.get();
+                let v = if s.is_empty() {
+                    serde_json::Value::Null
+                } else {
+                    serde_json::Value::String(s)
+                };
+                (k.clone(), v)
+            })
+            .collect();
 
         let mut req = UpdateItemRequest {
             name: Some(name),
@@ -504,70 +454,13 @@ fn ItemExpandedRow(
                 chrono::NaiveDate::parse_from_str(&date_acq_str, "%Y-%m-%d").ok()
             },
             state: None,
-            vinyl_size: None,
-            vinyl_speed: None,
-            vinyl_channels: None,
-            vinyl_disks: None,
-            vinyl_media_grading: None,
-            vinyl_sleeve_grading: None,
-            cd_disks: None,
-            dvd_disks: None,
-            cassette_cassettes: None,
+            soft_fields: Some(serde_json::Value::Object(sf_map)),
             loan_date_loaned: None,
             loan_date_due_back: None,
             loan_loaned_to: None,
             missing_date_missing: None,
             disposed_date_disposed: None,
         };
-
-        // Type-specific fields
-        match it {
-            ItemType::Vinyl => {
-                let vs = edit_vinyl_size.get();
-                if !vs.is_empty() {
-                    req.vinyl_size = Some(vs);
-                }
-                let vsp = edit_vinyl_speed.get();
-                if !vsp.is_empty() {
-                    req.vinyl_speed = Some(vsp);
-                }
-                let vc = edit_vinyl_channels.get();
-                if !vc.is_empty() {
-                    req.vinyl_channels = Some(vc);
-                }
-                let vd = edit_vinyl_disks.get();
-                if !vd.is_empty() {
-                    req.vinyl_disks = vd.parse().ok();
-                }
-                let vmg = edit_vinyl_media_grading.get();
-                if !vmg.is_empty() {
-                    req.vinyl_media_grading = Some(vmg);
-                }
-                let vsg = edit_vinyl_sleeve_grading.get();
-                if !vsg.is_empty() {
-                    req.vinyl_sleeve_grading = Some(vsg);
-                }
-            }
-            ItemType::Cd => {
-                let d = edit_cd_disks.get();
-                if !d.is_empty() {
-                    req.cd_disks = d.parse().ok();
-                }
-            }
-            ItemType::Dvd => {
-                let d = edit_dvd_disks.get();
-                if !d.is_empty() {
-                    req.dvd_disks = d.parse().ok();
-                }
-            }
-            ItemType::Cassette => {
-                let c = edit_cassette_cassettes.get();
-                if !c.is_empty() {
-                    req.cassette_cassettes = c.parse().ok();
-                }
-            }
-            _ => {}
-        }
 
         // State-specific fields
         match is {
@@ -625,8 +518,8 @@ fn ItemExpandedRow(
     });
 
     let locations_for_edit = locations_list.clone();
-    let item_type_for_view = item_type.clone();
     let item_state_for_view = item.state.clone();
+    let kind_name_for_edit = item.kind_name.clone();
 
     view! {
         <tr class="item-expanded" on:click=|e| e.stop_propagation()>
@@ -643,6 +536,7 @@ fn ItemExpandedRow(
                             move || {
                                 let description_text = item.description.clone().unwrap_or_else(|| "-".to_string());
                                 let notes_text = item.notes.clone().unwrap_or_else(|| "-".to_string());
+                                let soft_fields_view = render_soft_fields(&item.soft_fields);
                                 view! {
                                     <div class="detail-row">
                                         <div class="detail-group">
@@ -672,15 +566,14 @@ fn ItemExpandedRow(
                                             <span class="detail-value">{date_entered.clone()}</span>
                                         </div>
                                     </div>
+                                    {soft_fields_view}
                                     <Suspense fallback=move || view! { <div class="loading">"Loading details..."</div> }>
                                         {move || {
                                             details_resource.get().map(|result| match result {
                                                 Ok(details) => {
                                                     set_fetched_details.set(Some(details.clone()));
-                                                    let type_view = render_type_details(&details);
                                                     let state_view = render_state_details(&details);
                                                     view! {
-                                                        {type_view}
                                                         {state_view}
                                                     }.into_view()
                                                 }
@@ -705,11 +598,10 @@ fn ItemExpandedRow(
                     >
                         {
                             let locations_for_edit = locations_for_edit.clone();
-                            let item_type_for_view = item_type_for_view.clone();
                             let item_state_for_view = item_state_for_view.clone();
+                            let kind_name_for_edit = kind_name_for_edit.clone();
                             move || {
                                 let locs = locations_for_edit.clone();
-                                let it = item_type_for_view.clone();
                                 let is = item_state_for_view.clone();
                                 view! {
                                     <div class="detail-row">
@@ -774,12 +666,43 @@ fn ItemExpandedRow(
                                         </div>
                                         <div class="detail-group">
                                             <span class="detail-label">"Type:"</span>
-                                            <span class="detail-value">{it.display_name()}</span>
+                                            <span class="detail-value">{kind_name_for_edit.clone()}</span>
                                         </div>
                                     </div>
 
-                                    // Type-specific edit fields
-                                    {render_type_edit_fields(&it, edit_vinyl_size, set_edit_vinyl_size, edit_vinyl_speed, set_edit_vinyl_speed, edit_vinyl_channels, set_edit_vinyl_channels, edit_vinyl_disks, set_edit_vinyl_disks, edit_vinyl_media_grading, set_edit_vinyl_media_grading, edit_vinyl_sleeve_grading, set_edit_vinyl_sleeve_grading, edit_cd_disks, set_edit_cd_disks, edit_dvd_disks, set_edit_dvd_disks, edit_cassette_cassettes, set_edit_cassette_cassettes)}
+                                    // Soft fields edit section
+                                    {
+                                        let entries = soft_field_entries.get_value();
+                                        if entries.is_empty() {
+                                            ().into_view()
+                                        } else {
+                                            view! {
+                                                <div class="detail-section">
+                                                    <h4>"Details"</h4>
+                                                    {entries
+                                                        .into_iter()
+                                                        .map(|(k, r, set_w)| {
+                                                            let label = format_field_name(&k);
+                                                            view! {
+                                                                <div class="detail-row">
+                                                                    <div class="detail-group">
+                                                                        <span class="detail-label">{label + ":"}</span>
+                                                                        <input
+                                                                            type="text"
+                                                                            class="edit-input"
+                                                                            prop:value=r
+                                                                            on:input=move |ev| set_w.set(event_target_value(&ev))
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            }
+                                                        })
+                                                        .collect_view()}
+                                                </div>
+                                            }
+                                            .into_view()
+                                        }
+                                    }
 
                                     // State-specific edit fields
                                     {render_state_edit_fields(&is, edit_loan_date_loaned, set_edit_loan_date_loaned, edit_loan_date_due_back, set_edit_loan_date_due_back, edit_loan_loaned_to, set_edit_loan_loaned_to, edit_missing_date, set_edit_missing_date, edit_disposed_date, set_edit_disposed_date)}
@@ -810,171 +733,6 @@ fn ItemExpandedRow(
                 </div>
             </td>
         </tr>
-    }
-}
-
-fn vinyl_size_to_str(size: &Option<VinylSize>) -> String {
-    match size {
-        Some(VinylSize::TwelveInch) => "12_inch".to_string(),
-        Some(VinylSize::SixInch) => "6_inch".to_string(),
-        Some(VinylSize::Other) => "other".to_string(),
-        None => String::new(),
-    }
-}
-
-fn vinyl_speed_to_str(speed: &Option<VinylSpeed>) -> String {
-    match speed {
-        Some(VinylSpeed::ThirtyThree) => "33".to_string(),
-        Some(VinylSpeed::FortyFive) => "45".to_string(),
-        Some(VinylSpeed::Other) => "other".to_string(),
-        None => String::new(),
-    }
-}
-
-fn vinyl_channels_to_str(channels: &Option<VinylChannels>) -> String {
-    match channels {
-        Some(VinylChannels::Mono) => "mono".to_string(),
-        Some(VinylChannels::Stereo) => "stereo".to_string(),
-        Some(VinylChannels::Surround) => "surround".to_string(),
-        Some(VinylChannels::Other) => "other".to_string(),
-        None => String::new(),
-    }
-}
-
-fn grading_to_str(grading: &Option<Grading>) -> String {
-    match grading {
-        Some(Grading::Mint) => "mint".to_string(),
-        Some(Grading::NearMint) => "near_mint".to_string(),
-        Some(Grading::Excellent) => "excellent".to_string(),
-        Some(Grading::Good) => "good".to_string(),
-        Some(Grading::Fair) => "fair".to_string(),
-        Some(Grading::Poor) => "poor".to_string(),
-        None => String::new(),
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn render_type_edit_fields(
-    item_type: &ItemType,
-    edit_vinyl_size: ReadSignal<String>,
-    set_edit_vinyl_size: WriteSignal<String>,
-    edit_vinyl_speed: ReadSignal<String>,
-    set_edit_vinyl_speed: WriteSignal<String>,
-    edit_vinyl_channels: ReadSignal<String>,
-    set_edit_vinyl_channels: WriteSignal<String>,
-    edit_vinyl_disks: ReadSignal<String>,
-    set_edit_vinyl_disks: WriteSignal<String>,
-    edit_vinyl_media_grading: ReadSignal<String>,
-    set_edit_vinyl_media_grading: WriteSignal<String>,
-    edit_vinyl_sleeve_grading: ReadSignal<String>,
-    set_edit_vinyl_sleeve_grading: WriteSignal<String>,
-    edit_cd_disks: ReadSignal<String>,
-    set_edit_cd_disks: WriteSignal<String>,
-    edit_dvd_disks: ReadSignal<String>,
-    set_edit_dvd_disks: WriteSignal<String>,
-    edit_cassette_cassettes: ReadSignal<String>,
-    set_edit_cassette_cassettes: WriteSignal<String>,
-) -> View {
-    match item_type {
-        ItemType::Vinyl => view! {
-            <div class="detail-section">
-                <h4>"Vinyl Details"</h4>
-                <div class="detail-row">
-                    <div class="detail-group">
-                        <span class="detail-label">"Size:"</span>
-                        <select class="edit-select" prop:value=edit_vinyl_size on:change=move |ev| set_edit_vinyl_size.set(event_target_value(&ev))>
-                            <option value="">"- None -"</option>
-                            <option value="12_inch">"12\""</option>
-                            <option value="6_inch">"6\""</option>
-                            <option value="other">"Other"</option>
-                        </select>
-                    </div>
-                    <div class="detail-group">
-                        <span class="detail-label">"Speed:"</span>
-                        <select class="edit-select" prop:value=edit_vinyl_speed on:change=move |ev| set_edit_vinyl_speed.set(event_target_value(&ev))>
-                            <option value="">"- None -"</option>
-                            <option value="33">"33 RPM"</option>
-                            <option value="45">"45 RPM"</option>
-                            <option value="other">"Other"</option>
-                        </select>
-                    </div>
-                    <div class="detail-group">
-                        <span class="detail-label">"Channels:"</span>
-                        <select class="edit-select" prop:value=edit_vinyl_channels on:change=move |ev| set_edit_vinyl_channels.set(event_target_value(&ev))>
-                            <option value="">"- None -"</option>
-                            <option value="mono">"Mono"</option>
-                            <option value="stereo">"Stereo"</option>
-                            <option value="surround">"Surround"</option>
-                            <option value="other">"Other"</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-group">
-                        <span class="detail-label">"Disks:"</span>
-                        <input type="number" class="edit-input edit-input-narrow" min="1" prop:value=edit_vinyl_disks on:input=move |ev| set_edit_vinyl_disks.set(event_target_value(&ev)) />
-                    </div>
-                    <div class="detail-group">
-                        <span class="detail-label">"Media Grading:"</span>
-                        <select class="edit-select" prop:value=edit_vinyl_media_grading on:change=move |ev| set_edit_vinyl_media_grading.set(event_target_value(&ev))>
-                            <option value="">"- None -"</option>
-                            <option value="mint">"Mint"</option>
-                            <option value="near_mint">"Near Mint"</option>
-                            <option value="excellent">"Excellent"</option>
-                            <option value="good">"Good"</option>
-                            <option value="fair">"Fair"</option>
-                            <option value="poor">"Poor"</option>
-                        </select>
-                    </div>
-                    <div class="detail-group">
-                        <span class="detail-label">"Sleeve Grading:"</span>
-                        <select class="edit-select" prop:value=edit_vinyl_sleeve_grading on:change=move |ev| set_edit_vinyl_sleeve_grading.set(event_target_value(&ev))>
-                            <option value="">"- None -"</option>
-                            <option value="mint">"Mint"</option>
-                            <option value="near_mint">"Near Mint"</option>
-                            <option value="excellent">"Excellent"</option>
-                            <option value="good">"Good"</option>
-                            <option value="fair">"Fair"</option>
-                            <option value="poor">"Poor"</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-        }.into_view(),
-        ItemType::Cd => view! {
-            <div class="detail-section">
-                <h4>"CD Details"</h4>
-                <div class="detail-row">
-                    <div class="detail-group">
-                        <span class="detail-label">"Disks:"</span>
-                        <input type="number" class="edit-input edit-input-narrow" min="1" prop:value=edit_cd_disks on:input=move |ev| set_edit_cd_disks.set(event_target_value(&ev)) />
-                    </div>
-                </div>
-            </div>
-        }.into_view(),
-        ItemType::Dvd => view! {
-            <div class="detail-section">
-                <h4>"DVD Details"</h4>
-                <div class="detail-row">
-                    <div class="detail-group">
-                        <span class="detail-label">"Disks:"</span>
-                        <input type="number" class="edit-input edit-input-narrow" min="1" prop:value=edit_dvd_disks on:input=move |ev| set_edit_dvd_disks.set(event_target_value(&ev)) />
-                    </div>
-                </div>
-            </div>
-        }.into_view(),
-        ItemType::Cassette => view! {
-            <div class="detail-section">
-                <h4>"Cassette Details"</h4>
-                <div class="detail-row">
-                    <div class="detail-group">
-                        <span class="detail-label">"Cassettes:"</span>
-                        <input type="number" class="edit-input edit-input-narrow" min="1" prop:value=edit_cassette_cassettes on:input=move |ev| set_edit_cassette_cassettes.set(event_target_value(&ev)) />
-                    </div>
-                </div>
-            </div>
-        }.into_view(),
-        _ => ().into_view(),
     }
 }
 

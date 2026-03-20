@@ -1,5 +1,46 @@
 # VOStuff Project Journal
 
+## 2026-03-20 - Fix Broken Web UI Types (Soft Fields Migration TODO Item 1)
+
+**Prompts:**
+- "Implement the following plan: # Plan: Fix Broken Web UI Types (TODO Item 1) ..."
+
+**Summary:**
+
+Updated three web UI files to match the new soft-fields API contract, fixing
+the compile errors introduced when the backend was migrated.
+
+- **`crates/vostuff-web/src/server_fns/items.rs`**: Removed `ItemType`,
+  `VinylSize`, `VinylSpeed`, `VinylChannels`, `Grading` enums and
+  `VinylDetails`, `CdDetails`, `CassetteDetails`, `DvdDetails` structs. Updated
+  `Item` struct to use `kind_id: Uuid`, `kind_name: String`, and
+  `soft_fields: serde_json::Value`. Removed the four type-specific optional
+  fields from `ItemFullDetails`. Replaced 9 per-type fields in
+  `UpdateItemRequest` with a single `soft_fields: Option<serde_json::Value>`.
+  Renamed `ItemFilters.item_types` → `kinds`. Changed the `&item_type=` URL
+  parameter in `get_items` to `&kind=`.
+
+- **`crates/vostuff-web/src/components/items_table.rs`**: Updated imports to
+  remove old type enums. Changed sort key and column display from `item_type` /
+  `display_name()` to `kind` / `kind_name`. Added `value_to_edit_str`,
+  `format_field_name`, and `render_soft_fields` helpers. Replaced
+  `render_type_details` (hard-coded per-type sections) with `render_soft_fields`
+  which iterates the JSONB object directly — soft fields are now rendered in
+  view mode without an extra API call. Replaced the 9 per-type edit signals and
+  `render_type_edit_fields` with dynamic per-field signals built from
+  `item.soft_fields` at component creation; edit mode renders one text input per
+  field. `save_action` now collects soft fields into a `serde_json::Map` and
+  sends it as `soft_fields` in the update request. Removed all vinyl/CD/DVD/
+  cassette helper functions.
+
+- **`crates/vostuff-web/src/pages/home.rs`**: Removed `ItemType` import.
+  Replaced `ItemType::all()` with a hardcoded `Vec<FilterOption>` for the 8
+  shared kinds (TODO item 2 will replace this with a dynamic API call). Changed
+  `ItemFilters` construction from `item_types: types` to `kinds: types`.
+
+`cargo check --package vostuff-web` passes with zero errors (three pre-existing
+warnings unchanged).
+
 ## 2026-03-09 - Soft Fields Schema, API, and Sample Data Migration
 
 **Prompts:**

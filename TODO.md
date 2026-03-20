@@ -13,31 +13,14 @@
 The schema and API backend are updated. The following work remains to complete
 the migration end-to-end.
 
-### 1. Fix broken web UI types (blocking — UI will not compile)
+### ~~1. Fix broken web UI types (blocking — UI will not compile)~~ ✓ DONE
 
-The web UI (`crates/vostuff-web`) still uses the old hard-coded type model.
+~~The web UI (`crates/vostuff-web`) still uses the old hard-coded type model.~~
 
-- **`server_fns/items.rs`**
-  - Remove `ItemType` enum and its `display_name`/`api_value`/`all()` methods
-  - Remove `VinylSize`, `VinylSpeed`, `VinylChannels`, `Grading` enums and impls
-  - Remove `VinylDetails`, `CdDetails`, `CassetteDetails`, `DvdDetails` structs
-  - Update `Item` struct: replace `item_type: ItemType` with `kind_id: Uuid`,
-    `kind_name: String`, and `soft_fields: serde_json::Value`
-  - Update `ItemFullDetails`: remove type-specific detail fields; keep item +
-    state details only (matching new API response)
-  - Update `UpdateItemRequest`: remove all per-type fields (vinyl_size etc.);
-    add `soft_fields: Option<serde_json::Value>`
-  - Update `ItemFilters`: rename `item_types: Vec<String>` → `kinds: Vec<String>`
-  - Update `get_items` server fn: send `&kind=` instead of `&item_type=`
-
-- **`components/items_table.rs`**
-  - Replace `item_type` column display with `kind_name`
-  - Remove hard-coded `ItemType::all()` kind filter — fetch available kinds
-    from the API instead (see kind filter server fn below)
-  - Update edit panel: replace per-type detail fields with dynamic soft fields
-    rendered from the kind's field definitions (field name, type, enum values)
-  - Update item detail view: render `soft_fields` map dynamically instead of
-    type-specific sections
+Completed 2026-03-20. `server_fns/items.rs`, `components/items_table.rs`, and
+`pages/home.rs` all updated to use `kind_id`/`kind_name`/`soft_fields`. The
+kind filter dropdown is hardcoded to the 8 shared kinds for now (pending item 2).
+Edit mode renders all soft fields as text inputs.
 
 ### 2. New server fn: fetch kinds for filter dropdown
 

@@ -7,60 +7,6 @@ use uuid::Uuid;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
-pub enum ItemType {
-    Vinyl,
-    Cd,
-    Cassette,
-    Book,
-    Score,
-    Electronics,
-    Misc,
-    Dvd,
-}
-
-impl ItemType {
-    pub fn display_name(&self) -> &'static str {
-        match self {
-            ItemType::Vinyl => "Vinyl",
-            ItemType::Cd => "CD",
-            ItemType::Cassette => "Cassette",
-            ItemType::Book => "Book",
-            ItemType::Score => "Score",
-            ItemType::Electronics => "Electronics",
-            ItemType::Misc => "Misc",
-            ItemType::Dvd => "DVD",
-        }
-    }
-
-    pub fn api_value(&self) -> &'static str {
-        match self {
-            ItemType::Vinyl => "vinyl",
-            ItemType::Cd => "cd",
-            ItemType::Cassette => "cassette",
-            ItemType::Book => "book",
-            ItemType::Score => "score",
-            ItemType::Electronics => "electronics",
-            ItemType::Misc => "misc",
-            ItemType::Dvd => "dvd",
-        }
-    }
-
-    pub fn all() -> Vec<ItemType> {
-        vec![
-            ItemType::Vinyl,
-            ItemType::Cd,
-            ItemType::Cassette,
-            ItemType::Book,
-            ItemType::Score,
-            ItemType::Electronics,
-            ItemType::Misc,
-            ItemType::Dvd,
-        ]
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(rename_all = "snake_case")]
 pub enum ItemState {
     Current,
     Loaned,
@@ -110,7 +56,9 @@ impl ItemState {
 pub struct Item {
     pub id: Uuid,
     pub organization_id: Uuid,
-    pub item_type: ItemType,
+    pub kind_id: Uuid,
+    pub kind_name: String,
+    pub soft_fields: serde_json::Value,
     pub state: ItemState,
     pub name: String,
     pub description: Option<String>,
@@ -163,121 +111,6 @@ async fn get_auth_token() -> Result<String, ServerFnError<NoCustomError>> {
         .ok_or_else(|| ServerFnError::<NoCustomError>::ServerError("Not authenticated".to_string()))
 }
 
-// Vinyl-specific enums
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum VinylSize {
-    #[serde(rename = "12_inch")]
-    TwelveInch,
-    #[serde(rename = "6_inch")]
-    SixInch,
-    Other,
-}
-
-impl VinylSize {
-    pub fn display_name(&self) -> &'static str {
-        match self {
-            VinylSize::TwelveInch => "12\"",
-            VinylSize::SixInch => "6\"",
-            VinylSize::Other => "Other",
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum VinylSpeed {
-    #[serde(rename = "33")]
-    ThirtyThree,
-    #[serde(rename = "45")]
-    FortyFive,
-    Other,
-}
-
-impl VinylSpeed {
-    pub fn display_name(&self) -> &'static str {
-        match self {
-            VinylSpeed::ThirtyThree => "33 RPM",
-            VinylSpeed::FortyFive => "45 RPM",
-            VinylSpeed::Other => "Other",
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum VinylChannels {
-    Mono,
-    Stereo,
-    Surround,
-    Other,
-}
-
-impl VinylChannels {
-    pub fn display_name(&self) -> &'static str {
-        match self {
-            VinylChannels::Mono => "Mono",
-            VinylChannels::Stereo => "Stereo",
-            VinylChannels::Surround => "Surround",
-            VinylChannels::Other => "Other",
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Grading {
-    Mint,
-    NearMint,
-    Excellent,
-    Good,
-    Fair,
-    Poor,
-}
-
-impl Grading {
-    pub fn display_name(&self) -> &'static str {
-        match self {
-            Grading::Mint => "Mint",
-            Grading::NearMint => "Near Mint",
-            Grading::Excellent => "Excellent",
-            Grading::Good => "Good",
-            Grading::Fair => "Fair",
-            Grading::Poor => "Poor",
-        }
-    }
-}
-
-// Detail structs
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct VinylDetails {
-    pub item_id: Uuid,
-    pub size: Option<VinylSize>,
-    pub speed: Option<VinylSpeed>,
-    pub channels: Option<VinylChannels>,
-    pub disks: Option<i32>,
-    pub media_grading: Option<Grading>,
-    pub sleeve_grading: Option<Grading>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CdDetails {
-    pub item_id: Uuid,
-    pub disks: Option<i32>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CassetteDetails {
-    pub item_id: Uuid,
-    pub cassettes: Option<i32>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DvdDetails {
-    pub item_id: Uuid,
-    pub disks: Option<i32>,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LoanDetails {
     pub item_id: Uuid,
@@ -301,10 +134,6 @@ pub struct DisposedDetails {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ItemFullDetails {
     pub item: Item,
-    pub vinyl_details: Option<VinylDetails>,
-    pub cd_details: Option<CdDetails>,
-    pub cassette_details: Option<CassetteDetails>,
-    pub dvd_details: Option<DvdDetails>,
     pub loan_details: Option<LoanDetails>,
     pub missing_details: Option<MissingDetails>,
     pub disposed_details: Option<DisposedDetails>,
@@ -371,28 +200,8 @@ pub struct UpdateItemRequest {
     pub date_acquired: Option<chrono::NaiveDate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<ItemState>,
-    // Vinyl
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub vinyl_size: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub vinyl_speed: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub vinyl_channels: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub vinyl_disks: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub vinyl_media_grading: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub vinyl_sleeve_grading: Option<String>,
-    // CD
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cd_disks: Option<i32>,
-    // DVD
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dvd_disks: Option<i32>,
-    // Cassette
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cassette_cassettes: Option<i32>,
+    pub soft_fields: Option<serde_json::Value>,
     // Loan
     #[serde(skip_serializing_if = "Option::is_none")]
     pub loan_date_loaned: Option<chrono::NaiveDate>,
@@ -458,7 +267,7 @@ pub async fn update_item(
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ItemFilters {
-    pub item_types: Vec<String>,
+    pub kinds: Vec<String>,
     pub states: Vec<String>,
     pub location_ids: Vec<Uuid>,
     pub search_query: Option<String>,
@@ -486,8 +295,8 @@ pub async fn get_items(
     );
 
     if let Some(ref f) = filters {
-        if !f.item_types.is_empty() {
-            url.push_str(&format!("&item_type={}", f.item_types.join(",")));
+        if !f.kinds.is_empty() {
+            url.push_str(&format!("&kind={}", f.kinds.join(",")));
         }
         if !f.states.is_empty() {
             url.push_str(&format!("&state={}", f.states.join(",")));
