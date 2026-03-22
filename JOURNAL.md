@@ -1,5 +1,43 @@
 # VOStuff Project Journal
 
+## 2026-03-22 - Integration tests for kinds and fields APIs
+
+**Prompts:**
+- "Do these recent API changes have suitable unit tests?"
+- "yes"
+
+**Summary:**
+
+Added integration tests for the kinds and fields APIs, and fixed `clean_database`
+in the test common module to work with the new soft-fields schema.
+
+Files modified:
+- `crates/vostuff-api/tests/common/mod.rs` — replaced `TRUNCATE CASCADE` approach
+  with targeted `DELETE` statements; removed dropped tables (`vinyl_details`,
+  `cd_details`, `cassette_details`); preserves shared kinds/fields seed data by
+  only deleting rows where `org_id IS NOT NULL`
+
+Files created:
+- `crates/vostuff-api/tests/fields_tests.rs` — 16 integration tests covering:
+  - `list_fields`, `get_field` (shared, not found)
+  - `create_field`: string, enum with values, name conflicts (shared + org), non-enum with enum_values
+  - `update_field`: display_name, enum value replacement, remove-in-use 409 hard block,
+    shared field 403, non-enum field with enum_values 400
+  - `delete_field`: success, in-use-by-kind 409, shared 403, list shows org fields
+
+- `crates/vostuff-api/tests/kinds_tests.rs` — 18 integration tests covering:
+  - `list_kinds`, `get_kind` (shared with fields, not found)
+  - `create_kind`: with fields, name conflicts (shared + org)
+  - `update_kind`: display_name, add field, remove field without data, remove field
+    with data (blocked without force, succeeds with force, verifies soft_fields stripped)
+  - `update_kind` 403 on shared kind
+  - `delete_kind`: success, with items 409, shared 403
+  - `override_kind`: creates org copy with all fields
+  - `revert_kind`: reassigns items, removes org kind
+  - `get_field_impact`: zero, with data (2 of 3 items), field-not-in-kind 404
+
+All tests compile clean. `SQLX_OFFLINE=true cargo check --package vostuff-api --tests` passes.
+
 ## 2026-03-22 - Fields Management API + Impact Endpoint (Soft Fields TODO Items 4, 5, 11)
 
 **Prompts:**

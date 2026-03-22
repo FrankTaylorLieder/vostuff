@@ -138,12 +138,15 @@ enum and detail table inserts. Update to:
 ### 10. Fix integration tests
 
 The integration tests in `crates/vostuff-api/tests/` use the old schema:
-- `tests/common/mod.rs` — test setup creates items with `item_type`
 - `tests/items_tests.rs` — assertions reference `item_type`, detail tables
 - `tests/multi_tenancy_tests.rs` — may reference item_type
 
 Update all test fixtures and assertions to use `kind_id`/`kind_name` and
 `soft_fields`.
+
+Note: `tests/common/mod.rs` `clean_database` was updated 2026-03-22 to work
+with the new schema. New test files `kinds_tests.rs` and `fields_tests.rs`
+provide coverage for the new API.
 
 ### ~~11. Items count warning for field/kind removal~~ ✓ DONE
 

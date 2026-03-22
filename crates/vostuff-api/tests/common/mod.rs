@@ -43,32 +43,55 @@ impl TestContext {
         Self { pool, state, app }
     }
 
-    /// Clean all tables in the database
+    /// Clean all tables in the database, preserving shared kinds/fields seed data
     async fn clean_database(pool: &PgPool) {
-        // Disable foreign key checks temporarily and truncate all tables
-        let tables = vec![
+        // Delete in dependency order; use DELETE (not TRUNCATE CASCADE) so that
+        // shared kinds/fields with org_id IS NULL are not touched.
+
+        // Item detail/link tables first (leaf nodes)
+        for table in [
             "item_tags",
             "item_collections",
             "item_disposed_details",
             "item_missing_details",
             "item_loan_details",
-            "vinyl_details",
-            "cd_details",
-            "cassette_details",
             "items",
-            "tags",
-            "collections",
-            "locations",
-            "user_organizations",
-            "users",
-            "organizations",
-        ];
-
-        for table in tables {
-            sqlx::query(&format!("TRUNCATE TABLE {} CASCADE", table))
+        ] {
+            sqlx::query(&format!("DELETE FROM {}", table))
                 .execute(pool)
                 .await
-                .expect(&format!("Failed to truncate table {}", table));
+                .expect(&format!("Failed to delete from {}", table));
+        }
+
+        // Org-specific content
+        for table in ["tags", "collections", "locations"] {
+            sqlx::query(&format!("DELETE FROM {}", table))
+                .execute(pool)
+                .await
+                .expect(&format!("Failed to delete from {}", table));
+        }
+
+        // Org-specific kinds and fields; CASCADE removes kind_fields and enum_values
+        for stmt in [
+            "DELETE FROM kinds WHERE org_id IS NOT NULL",
+            "DELETE FROM fields WHERE org_id IS NOT NULL",
+        ] {
+            sqlx::query(stmt)
+                .execute(pool)
+                .await
+                .expect("Failed to delete org-specific kinds/fields");
+        }
+
+        // Users and orgs (preserve the SYSTEM org at the fixed UUID)
+        for stmt in [
+            "DELETE FROM user_organizations",
+            "DELETE FROM users",
+            "DELETE FROM organizations WHERE id != '00000000-0000-0000-0000-000000000000'",
+        ] {
+            sqlx::query(stmt)
+                .execute(pool)
+                .await
+                .expect("Failed to delete users/orgs");
         }
     }
 
