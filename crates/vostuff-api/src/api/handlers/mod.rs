@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod collections;
+pub mod fields;
 pub mod items;
 pub mod kinds;
 pub mod locations;
@@ -12,6 +13,7 @@ use axum::{
     Router, middleware,
     routing::{delete, get, patch, post},
 };
+
 
 /// Build the API router with all routes configured
 /// This is used by both the main application and integration tests
@@ -72,6 +74,25 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/organizations/:org_id/kinds/:kind_id/revert",
             post(kinds::revert_kind),
+        )
+        .route(
+            "/organizations/:org_id/kinds/:kind_id/fields/:field_id/impact",
+            get(kinds::get_field_impact),
+        )
+        // Fields
+        .route("/organizations/:org_id/fields", get(fields::list_fields))
+        .route("/organizations/:org_id/fields", post(fields::create_field))
+        .route(
+            "/organizations/:org_id/fields/:field_id",
+            get(fields::get_field),
+        )
+        .route(
+            "/organizations/:org_id/fields/:field_id",
+            patch(fields::update_field),
+        )
+        .route(
+            "/organizations/:org_id/fields/:field_id",
+            delete(fields::delete_field),
         )
         // Collections
         .route(

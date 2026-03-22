@@ -61,9 +61,9 @@ Response model for a kind should include:
 }
 ```
 
-### 4. New API: fields management
+### ~~4. New API: fields management~~ ✓ DONE
 
-New handler file `crates/vostuff-api/src/api/handlers/fields.rs` with:
+Completed 2026-03-22. New handler file `crates/vostuff-api/src/api/handlers/fields.rs` with:
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -78,14 +78,11 @@ For enum field management (on PATCH):
 - Removing an enum value must warn how many items currently hold that value
   and strip it from `soft_fields` on confirmation (handled server-side)
 
-### 5. Register new routes
+### ~~5. Register new routes~~ ✓ DONE
 
-In `crates/vostuff-api/src/api/handlers/mod.rs`:
-- Add `pub mod kinds;` and `pub mod fields;`
-- Wire routes into `build_router`
-
-In `crates/vostuff-api/src/bin/api_server.rs`:
-- Add new models to the OpenAPI `components(schemas(...))` block
+Completed 2026-03-22. `pub mod fields;` added to `mod.rs`, all 5 field routes
+and the impact route wired into `build_router`. OpenAPI schemas and paths
+registered in `api_server.rs`.
 
 ### 6. New UI: kinds and fields management page
 
@@ -148,15 +145,9 @@ The integration tests in `crates/vostuff-api/tests/` use the old schema:
 Update all test fixtures and assertions to use `kind_id`/`kind_name` and
 `soft_fields`.
 
-### 11. Items count warning for field/kind removal
+### ~~11. Items count warning for field/kind removal~~ ✓ DONE
 
-The design doc requires the UI to show how many items will be affected before
-removing a field from a kind or deleting an enum value. Add an API endpoint:
-
-`GET /organizations/:org_id/kinds/:kind_id/fields/:field_id/impact`
-
-Returns `{ "item_count": N }` — the number of items of this kind that have a
-non-null value for this field in `soft_fields`.
-
-Used by the UI before confirming field removal from a kind, kind deletion,
-and enum value removal.
+Completed 2026-03-22. `GET /organizations/:org_id/kinds/:kind_id/fields/:field_id/impact`
+added to `kinds.rs` as `get_field_impact`. Returns `{ "item_count": N }`.
+The `update_field` handler (item 4) also hard-blocks removal of enum values
+in use by items with a 409 and clear error message.

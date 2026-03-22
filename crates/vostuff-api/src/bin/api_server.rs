@@ -7,7 +7,7 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use vostuff_api::api::{
-    handlers::{auth, collections, items, kinds, locations, organizations, tags, users},
+    handlers::{auth, collections, fields, items, kinds, locations, organizations, tags, users},
     models::*,
     state::AppState,
 };
@@ -29,6 +29,13 @@ use vostuff_api::api::{
         kinds::delete_kind,
         kinds::override_kind,
         kinds::revert_kind,
+        kinds::get_field_impact,
+        // Fields
+        fields::list_fields,
+        fields::get_field,
+        fields::create_field,
+        fields::update_field,
+        fields::delete_field,
         // Locations
         locations::list_locations,
         locations::create_location,
@@ -66,9 +73,12 @@ use vostuff_api::api::{
     components(
         schemas(
             kinds::KindSummary,
-            kinds::Kind, kinds::KindField, kinds::EnumValue, kinds::FieldType,
+            kinds::Kind, kinds::KindField,
             kinds::CreateKindRequest, kinds::UpdateKindRequest,
             kinds::RevertResponse, kinds::DataLossError,
+            kinds::FieldImpact,
+            fields::FieldType, fields::EnumValue,
+            fields::Field, fields::CreateFieldRequest, fields::UpdateFieldRequest, fields::EnumValueInput,
             Item, ItemState,
             CreateItemRequest, UpdateItemRequest,
             Location, CreateLocationRequest,
@@ -85,6 +95,7 @@ use vostuff_api::api::{
     tags(
         (name = "items", description = "Item management endpoints"),
         (name = "kinds", description = "Kind management endpoints"),
+        (name = "fields", description = "Field management endpoints"),
         (name = "locations", description = "Location management endpoints"),
         (name = "collections", description = "Collection management endpoints"),
         (name = "tags", description = "Tag management endpoints"),

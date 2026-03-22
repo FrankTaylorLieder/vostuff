@@ -13,42 +13,7 @@ use crate::api::{
     state::AppState,
 };
 
-// ── Public types ────────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum FieldType {
-    String,
-    Text,
-    Date,
-    Datetime,
-    Number,
-    Enum,
-    Boolean,
-}
-
-impl FieldType {
-    fn from_str(s: &str) -> Self {
-        match s {
-            "string" => FieldType::String,
-            "text" => FieldType::Text,
-            "date" => FieldType::Date,
-            "datetime" => FieldType::Datetime,
-            "number" => FieldType::Number,
-            "enum" => FieldType::Enum,
-            "boolean" => FieldType::Boolean,
-            _ => FieldType::String,
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct EnumValue {
-    pub id: Uuid,
-    pub value: String,
-    pub display_value: Option<String>,
-    pub sort_order: i32,
-}
+pub use super::fields::{EnumValue, FieldType};
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct KindField {
@@ -799,6 +764,69 @@ pub async fn revert_kind(
         items_reassigned,
         orphaned_field_names,
     }))
+}
+
+// ── Impact endpoint ──────────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct FieldImpact {
+    pub item_count: i64,
+}
+
+/// Return how many items would lose data if a field were removed from a kind
+#[utoipa::path(
+    get,
+    path = "/api/organizations/{org_id}/kinds/{kind_id}/fields/{field_id}/impact",
+    params(
+        ("org_id" = Uuid, Path, description = "Organization ID"),
+        ("kind_id" = Uuid, Path, description = "Kind ID"),
+        ("field_id" = Uuid, Path, description = "Field ID"),
+    ),
+    responses(
+        (status = 200, description = "Impact count", body = FieldImpact),
+        (status = 404, description = "Field not part of this kind", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse),
+    ),
+    tag = "kinds"
+)]
+pub async fn get_field_impact(
+    State(state): State<AppState>,
+    Path((org_id, kind_id, field_id)): Path<(Uuid, Uuid, Uuid)>,
+) -> Result<Json<FieldImpact>, (StatusCode, Json<ErrorResponse>)> {
+    // Verify field is part of this kind
+    let exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM kind_fields WHERE kind_id = $1 AND field_id = $2)",
+    )
+    .bind(kind_id)
+    .bind(field_id)
+    .fetch_one(&state.pool)
+    .await
+    .map_err(internal_error)?;
+
+    if !exists {
+        return Err(not_found());
+    }
+
+    // Get the field name
+    let field_name: String = sqlx::query_scalar("SELECT name FROM fields WHERE id = $1")
+        .bind(field_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(internal_error)?
+        .ok_or_else(not_found)?;
+
+    // Count impacted items
+    let item_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM items WHERE organization_id = $1 AND kind_id = $2 AND (soft_fields ->> $3) IS NOT NULL",
+    )
+    .bind(org_id)
+    .bind(kind_id)
+    .bind(&field_name)
+    .fetch_one(&state.pool)
+    .await
+    .map_err(internal_error)?;
+
+    Ok(Json(FieldImpact { item_count }))
 }
 
 // ── Error helpers ────────────────────────────────────────────────────────────

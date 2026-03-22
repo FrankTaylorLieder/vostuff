@@ -1,5 +1,47 @@
 # VOStuff Project Journal
 
+## 2026-03-22 - Fields Management API + Impact Endpoint (Soft Fields TODO Items 4, 5, 11)
+
+**Prompts:**
+- "Implement the following plan: # Plan: Fields Management API + Impact Endpoint (TODO Items 4, 5, 11) ..."
+
+**Summary:**
+
+Implemented the fields management API (items 4 and 5) and the field impact endpoint (item 11).
+
+Files created/modified:
+- `crates/vostuff-api/src/api/handlers/fields.rs` — **new file** with:
+  - Public types: `FieldType` (enum, moved from `kinds.rs`), `EnumValue` (moved),
+    `Field`, `CreateFieldRequest`, `UpdateFieldRequest`, `EnumValueInput`
+  - Internal types: `EnumValueJson`, `FieldRow`; `TryFrom<FieldRow>` for `Field`
+  - Core `FIELD_SELECT` SQL constant: `json_agg` query for fields + enum values
+  - `list_fields` — `GET /organizations/:org_id/fields`
+  - `get_field` — `GET /organizations/:org_id/fields/:field_id`
+  - `create_field` — `POST`; name conflict checks (shared + org); enum_values
+    validation; transaction with INSERT into fields then enum_values
+  - `update_field` — `PATCH`; org ownership check (403 for shared fields);
+    enum value replacement with hard-block 409 if any removed value is currently
+    assigned to items (no force escape)
+  - `delete_field` — `DELETE`; 409 if field is referenced by any kind_fields rows
+
+- `crates/vostuff-api/src/api/handlers/kinds.rs` — refactored:
+  - Removed `FieldType` and `EnumValue` definitions; replaced with
+    `pub use super::fields::{EnumValue, FieldType}`
+  - Added `FieldImpact` response type
+  - Added `get_field_impact` handler — `GET .../kinds/:kind_id/fields/:field_id/impact`;
+    verifies field is in kind, gets field name, counts items with non-null value
+    in `soft_fields`
+
+- `crates/vostuff-api/src/api/handlers/mod.rs` — added `pub mod fields;` and
+  wired 5 field routes + 1 impact route into `build_router`
+
+- `crates/vostuff-api/src/bin/api_server.rs` — registered all new paths and
+  schemas in `#[openapi]`; moved `FieldType`/`EnumValue` schema refs from
+  `kinds::` to `fields::`; added `fields` tag
+
+Verified: `SQLX_OFFLINE=true cargo check --package vostuff-api` clean; no new
+clippy warnings.
+
 ## 2026-03-22 - Full Kinds Management API (Soft Fields TODO Item 3)
 
 **Prompts:**
