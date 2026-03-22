@@ -1,5 +1,35 @@
 # VOStuff Project Journal
 
+## 2026-03-22 - Item detail view for soft fields (TODO item 8)
+
+**Prompts:**
+- "Implement the following plan: # Plan: Item Detail View for Soft Fields (TODO Item 8) ..."
+
+**Summary:**
+
+Implemented soft-field-aware rendering for the item detail (expanded row) view.
+
+Changes in `crates/vostuff-web/src/server_fns/kinds.rs`:
+- Added `KindEnumValue` and `KindFieldDef` structs (serializable, cloneable)
+- Added internal `KindWithFields` struct for deserialising the API response
+- Added `get_kind_fields(org_id, kind_id)` server function that calls
+  `GET /organizations/:org_id/kinds/:kind_id` and returns the `fields` array
+
+Changes in `crates/vostuff-web/src/components/items_table.rs`:
+- Imported `get_kind_fields`, `KindEnumValue`, `KindFieldDef` from `server_fns::kinds`
+- In `ItemExpandedRow`: added `soft_fields_stored` store-value and
+  `kind_fields_resource` (resource keyed on `(org_id, kind_id)`)
+- Replaced the static `soft_fields_view` binding with a reactive closure that
+  calls `render_soft_fields_with_defs` when the resource resolves successfully,
+  falling back to `render_soft_fields` while loading or on error
+- Added `format_soft_field_value` helper: resolves enum display values,
+  renders booleans as "Yes"/"No", passes other types through as-is
+- Added `render_soft_fields_with_defs` helper: sorts fields by `display_order`,
+  uses `display_name` as label, skips null/empty values, appends orphaned keys
+  (present in `soft_fields` but absent from kind definition) at the end
+
+No new compiler warnings introduced. All pre-existing warnings are unchanged.
+
 ## 2026-03-22 - Fix existing integration tests for new schema
 
 **Prompts:**

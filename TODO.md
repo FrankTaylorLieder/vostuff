@@ -118,14 +118,15 @@ The item create and edit forms need to be soft-field-aware:
 - On edit: load the item's kind, fetch its field definitions, render current
   `soft_fields` values into the form
 
-### 8. Fix item detail view for soft fields
+### ~~8. Fix item detail view for soft fields~~ ✓ DONE
 
-The expanded item detail panel in the items table currently has hard-coded
-sections for vinyl, CD, cassette, DVD details. Replace with a dynamic renderer:
-- Fetch the kind's fields (ordered by `display_order`)
-- For each field, display its `display_name` and the value from `soft_fields`
-  (formatted appropriately per type: dates, booleans, enum display values)
-- Show nothing for fields with no value in `soft_fields`
+Completed 2026-03-22. `get_kind_fields` server fn added to `server_fns/kinds.rs`
+(fetches `GET /organizations/:org_id/kinds/:kind_id` and returns the fields array).
+`ItemExpandedRow` in `components/items_table.rs` now creates a `kind_fields_resource`
+and uses it to render soft fields via `render_soft_fields_with_defs`: fields ordered
+by `display_order`, labelled with `display_name`, enums resolved to `display_value`,
+booleans rendered as "Yes"/"No". Falls back to the old `render_soft_fields` while
+the resource is loading or on error.
 
 ### 9. Update CLZ importer
 

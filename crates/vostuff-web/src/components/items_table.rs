@@ -7,6 +7,7 @@ use pulldown_cmark::{Options, Parser, html};
 use crate::server_fns::items::{
     Item, ItemFullDetails, ItemState, Location, UpdateItemRequest, get_item_details, update_item,
 };
+use crate::server_fns::kinds::{get_kind_fields, KindEnumValue, KindFieldDef};
 
 fn render_markdown(text: &str) -> String {
     let options = Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES;
@@ -226,6 +227,110 @@ fn render_soft_fields(soft_fields: &serde_json::Value) -> View {
     .into_view()
 }
 
+fn format_soft_field_value(
+    field_type: &str,
+    raw: &serde_json::Value,
+    enum_values: &[KindEnumValue],
+) -> String {
+    let s = match raw {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Number(n) => n.to_string(),
+        serde_json::Value::Bool(b) => b.to_string(),
+        other => other.to_string(),
+    };
+    match field_type {
+        "boolean" => {
+            if s == "true" {
+                "Yes".to_string()
+            } else if s == "false" {
+                "No".to_string()
+            } else {
+                s
+            }
+        }
+        "enum" => enum_values
+            .iter()
+            .find(|ev| ev.value == s)
+            .and_then(|ev| ev.display_value.clone())
+            .unwrap_or(s),
+        _ => s,
+    }
+}
+
+fn render_soft_fields_with_defs(
+    soft_fields: &serde_json::Value,
+    kind_fields: &[KindFieldDef],
+) -> View {
+    let Some(obj) = soft_fields.as_object() else {
+        return ().into_view();
+    };
+
+    let mut field_names_in_kind: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+    let mut pairs: Vec<(String, String)> = Vec::new();
+
+    let mut sorted_fields: Vec<&KindFieldDef> = kind_fields.iter().collect();
+    sorted_fields.sort_by_key(|f| f.display_order);
+
+    for field_def in &sorted_fields {
+        field_names_in_kind.insert(field_def.name.clone());
+        let Some(raw_val) = obj.get(&field_def.name) else {
+            continue;
+        };
+        if raw_val.is_null() {
+            continue;
+        }
+        let raw_str = value_to_edit_str(raw_val);
+        if raw_str.is_empty() {
+            continue;
+        }
+        let label = field_def
+            .display_name
+            .as_deref()
+            .unwrap_or(&field_def.name)
+            .to_string();
+        let value = format_soft_field_value(&field_def.field_type, raw_val, &field_def.enum_values);
+        pairs.push((label, value));
+    }
+
+    // Orphaned fields: in soft_fields but not in the kind definition
+    for (k, v) in obj.iter() {
+        if field_names_in_kind.contains(k) {
+            continue;
+        }
+        if v.is_null() {
+            continue;
+        }
+        let s = value_to_edit_str(v);
+        if s.is_empty() {
+            continue;
+        }
+        pairs.push((format_field_name(k), s));
+    }
+
+    if pairs.is_empty() {
+        return ().into_view();
+    }
+
+    view! {
+        <div class="detail-section">
+            <h4>"Details"</h4>
+            <div class="detail-row">
+                {pairs
+                    .into_iter()
+                    .map(|(label, value)| view! {
+                        <div class="detail-group">
+                            <span class="detail-label">{label + ":"}</span>
+                            <span class="detail-value">{value}</span>
+                        </div>
+                    })
+                    .collect_view()}
+            </div>
+        </div>
+    }
+    .into_view()
+}
+
 fn render_state_details(details: &ItemFullDetails) -> View {
     if let Some(ref loan) = details.loan_details {
         let date_loaned = loan.date_loaned.format("%Y-%m-%d").to_string();
@@ -337,6 +442,13 @@ fn ItemExpandedRow(
         .collect();
     let soft_field_entries = store_value(soft_field_entries);
     let orig_soft_fields = store_value(item.soft_fields.clone());
+    let soft_fields_stored = store_value(item.soft_fields.clone());
+    let kind_id_stored = item.kind_id;
+
+    let kind_fields_resource = create_resource(
+        move || (org_id, kind_id_stored),
+        move |(org_id, kind_id)| async move { get_kind_fields(org_id, kind_id).await },
+    );
 
     // Loan signals
     let (edit_loan_date_loaned, set_edit_loan_date_loaned) = create_signal(String::new());
@@ -536,7 +648,6 @@ fn ItemExpandedRow(
                             move || {
                                 let description_text = item.description.clone().unwrap_or_else(|| "-".to_string());
                                 let notes_text = item.notes.clone().unwrap_or_else(|| "-".to_string());
-                                let soft_fields_view = render_soft_fields(&item.soft_fields);
                                 view! {
                                     <div class="detail-row">
                                         <div class="detail-group">
@@ -566,7 +677,13 @@ fn ItemExpandedRow(
                                             <span class="detail-value">{date_entered.clone()}</span>
                                         </div>
                                     </div>
-                                    {soft_fields_view}
+                                    {move || {
+                                        let sf = soft_fields_stored.get_value();
+                                        match kind_fields_resource.get() {
+                                            Some(Ok(fields)) => render_soft_fields_with_defs(&sf, &fields),
+                                            _ => render_soft_fields(&sf),
+                                        }
+                                    }}
                                     <Suspense fallback=move || view! { <div class="loading">"Loading details..."</div> }>
                                         {move || {
                                             details_resource.get().map(|result| match result {
