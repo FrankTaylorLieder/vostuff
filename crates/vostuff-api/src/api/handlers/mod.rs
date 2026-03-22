@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod collections;
 pub mod items;
+pub mod kinds;
 pub mod locations;
 pub mod organizations;
 pub mod tags;
@@ -48,6 +49,29 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/organizations/:org_id/locations/:location_id",
             delete(locations::delete_location),
+        )
+        // Kinds
+        .route("/organizations/:org_id/kinds", get(kinds::list_kinds))
+        .route("/organizations/:org_id/kinds", post(kinds::create_kind))
+        .route(
+            "/organizations/:org_id/kinds/:kind_id",
+            get(kinds::get_kind),
+        )
+        .route(
+            "/organizations/:org_id/kinds/:kind_id",
+            patch(kinds::update_kind),
+        )
+        .route(
+            "/organizations/:org_id/kinds/:kind_id",
+            delete(kinds::delete_kind),
+        )
+        .route(
+            "/organizations/:org_id/kinds/:kind_id/override",
+            post(kinds::override_kind),
+        )
+        .route(
+            "/organizations/:org_id/kinds/:kind_id/revert",
+            post(kinds::revert_kind),
         )
         // Collections
         .route(

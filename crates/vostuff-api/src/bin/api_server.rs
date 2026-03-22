@@ -7,7 +7,7 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use vostuff_api::api::{
-    handlers::{auth, collections, items, locations, organizations, tags, users},
+    handlers::{auth, collections, items, kinds, locations, organizations, tags, users},
     models::*,
     state::AppState,
 };
@@ -21,6 +21,14 @@ use vostuff_api::api::{
         items::create_item,
         items::update_item,
         items::delete_item,
+        // Kinds
+        kinds::list_kinds,
+        kinds::get_kind,
+        kinds::create_kind,
+        kinds::update_kind,
+        kinds::delete_kind,
+        kinds::override_kind,
+        kinds::revert_kind,
         // Locations
         locations::list_locations,
         locations::create_location,
@@ -57,6 +65,10 @@ use vostuff_api::api::{
     ),
     components(
         schemas(
+            kinds::KindSummary,
+            kinds::Kind, kinds::KindField, kinds::EnumValue, kinds::FieldType,
+            kinds::CreateKindRequest, kinds::UpdateKindRequest,
+            kinds::RevertResponse, kinds::DataLossError,
             Item, ItemState,
             CreateItemRequest, UpdateItemRequest,
             Location, CreateLocationRequest,
@@ -72,6 +84,7 @@ use vostuff_api::api::{
     ),
     tags(
         (name = "items", description = "Item management endpoints"),
+        (name = "kinds", description = "Kind management endpoints"),
         (name = "locations", description = "Location management endpoints"),
         (name = "collections", description = "Collection management endpoints"),
         (name = "tags", description = "Tag management endpoints"),

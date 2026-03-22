@@ -22,13 +22,17 @@ Completed 2026-03-20. `server_fns/items.rs`, `components/items_table.rs`, and
 kind filter dropdown is hardcoded to the 8 shared kinds for now (pending item 2).
 Edit mode renders all soft fields as text inputs.
 
-### 2. New server fn: fetch kinds for filter dropdown
+### ~~2. New server fn: fetch kinds for filter dropdown~~ ✓ DONE
 
-Add a `get_kinds` server fn in the web UI that calls the kinds API (section 3
-below) so the kind filter dropdown is populated from the database rather than
-hard-coded.
+~~Add a `get_kinds` server fn in the web UI that calls the kinds API (section 3~~
+~~below) so the kind filter dropdown is populated from the database rather than~~
+~~hard-coded.~~
 
-### 3. New API: kinds management
+Completed 2026-03-22. `GET /organizations/:org_id/kinds` endpoint added to the
+API. `server_fns/kinds.rs` created in the web UI. `pages/home.rs` updated to
+fetch kinds dynamically and build `type_options` from the API response.
+
+### ~~3. New API: kinds management (full CRUD)~~ ✓ DONE
 
 New handler file `crates/vostuff-api/src/api/handlers/kinds.rs` with:
 

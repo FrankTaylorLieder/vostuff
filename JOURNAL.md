@@ -1,5 +1,82 @@
 # VOStuff Project Journal
 
+## 2026-03-22 - Full Kinds Management API (Soft Fields TODO Item 3)
+
+**Prompts:**
+- "Implement the following plan: # Plan: Full Kinds Management API (TODO Item 3) ..."
+
+**Summary:**
+
+Implemented the full CRUD kinds management API. Expanded `list_kinds` to return
+`Vec<Kind>` (with all fields and enum values via a `json_agg` query), and added
+six new handlers.
+
+Files modified:
+- `crates/vostuff-api/src/api/handlers/kinds.rs` — rewrote to add:
+  - New public types: `Kind`, `KindField`, `EnumValue`, `FieldType` (enum),
+    `CreateKindRequest`, `UpdateKindRequest`, `RevertResponse`, `DataLossError`
+  - Internal row types: `KindRow` (uses `serde_json::Value` for `fields`),
+    `KindFieldJson`, `EnumValueJson`; `TryFrom<KindRow>` for `Kind`
+  - Core `KIND_SELECT` SQL constant: single `json_agg` query fetching kinds with
+    their ordered fields and enum values
+  - `list_kinds` — updated to return `Vec<Kind>`
+  - `get_kind` — `GET /:org_id/kinds/:kind_id`
+  - `create_kind` — `POST /:org_id/kinds`; validates name uniqueness and field
+    IDs; uses a transaction for atomic insert
+  - `update_kind` — `PATCH /:org_id/kinds/:kind_id?force=bool`; checks org
+    ownership; detects data loss from removed fields; returns 409 with field
+    names unless `force=true`; strips orphaned field values when forced
+  - `delete_kind` — `DELETE /:org_id/kinds/:kind_id`; checks no items in use
+  - `override_kind` — `POST /:org_id/kinds/:kind_id/override`; copies a shared
+    kind + its field set into the org
+  - `revert_kind` — `POST /:org_id/kinds/:kind_id/revert`; reassigns items to
+    shared kind and deletes org kind; returns orphaned field names
+- `crates/vostuff-api/src/api/handlers/mod.rs` — replaced single kinds route
+  with 7 routes (list, create, get, update, delete, override, revert)
+- `crates/vostuff-api/src/bin/api_server.rs` — registered 6 new paths and 8
+  new schema types in the OpenAPI spec
+
+All handlers use non-macro `sqlx::query` / `sqlx::query_as` calls (no `query!`
+macros) so the code compiles clean with `SQLX_OFFLINE=true`. No new clippy
+warnings introduced.
+
+## 2026-03-22 - Dynamic Kinds Fetch for Filter Dropdown (Soft Fields TODO Item 2)
+
+**Prompts:**
+- "Implement the following plan: # Plan: Dynamic Kinds Fetch for Filter Dropdown (TODO Item 2) ..."
+
+**Summary:**
+
+Replaced the hardcoded 8-item type filter dropdown in the home page with a live
+fetch from the API.
+
+Files created:
+- `crates/vostuff-api/src/api/handlers/kinds.rs` — `list_kinds` handler: queries
+  `kinds` table for rows where `org_id IS NULL OR org_id = $1`, returns
+  `Vec<KindSummary>` (id, name, display_name). Follows the same pattern as
+  `locations.rs`.
+- `crates/vostuff-web/src/server_fns/kinds.rs` — `get_kinds` server function:
+  calls the new API endpoint with the JWT token from cookies; returns
+  `Vec<KindSummary>`.
+
+Files modified:
+- `crates/vostuff-api/src/api/handlers/mod.rs` — added `pub mod kinds;` and
+  `.route("/organizations/:org_id/kinds", get(kinds::list_kinds))`.
+- `crates/vostuff-api/src/bin/api_server.rs` — added `kinds::list_kinds` to
+  OpenAPI `paths`, `KindSummary` to `schemas`, `kinds` tag.
+- `crates/vostuff-web/src/server_fns/items.rs` — made `get_auth_token`
+  `pub(crate)` so `kinds.rs` can reuse it.
+- `crates/vostuff-web/src/server_fns/mod.rs` — added `pub mod kinds;`.
+- `crates/vostuff-web/src/pages/home.rs` — removed hardcoded `type_options`
+  store_value; added `kinds_resource`; extended Suspense match to 3-tuple
+  `(locations, items, kinds)`; built `type_options: Vec<FilterOption>` from
+  API response inside the success branch.
+
+Both `vostuff-api` and `vostuff-web` pass `cargo check` and `cargo clippy`
+with no new errors.
+
+---
+
 ## 2026-03-20 - Fix Broken Web UI Types (Soft Fields Migration TODO Item 1)
 
 **Prompts:**
