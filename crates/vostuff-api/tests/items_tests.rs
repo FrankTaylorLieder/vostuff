@@ -5,32 +5,25 @@ use common::TestFixture;
 use serde_json::json;
 use uuid::Uuid;
 
+// Fixed UUIDs from seed migration
+const BOOK_KIND_ID: &str = "00000000-0000-0000-0000-000000000004";
+const VINYL_KIND_ID: &str = "00000000-0000-0000-0000-000000000001";
+const CD_KIND_ID: &str = "00000000-0000-0000-0000-000000000002";
+const MISC_KIND_ID: &str = "00000000-0000-0000-0000-000000000007";
+
 #[tokio::test]
 async fn test_create_and_get_book_item() {
     let fixture = TestFixture::new().await;
+    let book_id = Uuid::parse_str(BOOK_KIND_ID).unwrap();
 
-    // Create a location first
-    let loc_response = fixture
-        .ctx
-        .post(
-            &format!("/api/organizations/{}/locations", fixture.org1_id),
-            &json!({"name": "Library"}),
-            Some(&fixture.user1_token),
-        )
-        .await;
-    loc_response.assert_success();
-    let location_id: Uuid = loc_response.body["id"].as_str().unwrap().parse().unwrap();
-
-    // Create a book item
     let create_response = fixture
         .ctx
         .post(
             &format!("/api/organizations/{}/items", fixture.org1_id),
             &json!({
-                "item_type": "book",
+                "kind_id": book_id,
                 "name": "The Rust Programming Language",
-                "description": "Official Rust book",
-                "location_id": location_id
+                "description": "Official Rust book"
             }),
             Some(&fixture.user1_token),
         )
@@ -43,7 +36,6 @@ async fn test_create_and_get_book_item() {
         .parse()
         .unwrap();
 
-    // Get the item
     let get_response = fixture
         .ctx
         .get(
@@ -54,37 +46,24 @@ async fn test_create_and_get_book_item() {
 
     get_response.assert_success();
     assert_eq!(get_response.body["name"], "The Rust Programming Language");
-    assert_eq!(get_response.body["item_type"], "book");
+    assert_eq!(get_response.body["kind_name"], "book");
     assert_eq!(get_response.body["state"], "current");
 }
 
 #[tokio::test]
-async fn test_create_vinyl_with_details() {
+async fn test_create_vinyl_with_soft_fields() {
     let fixture = TestFixture::new().await;
+    let vinyl_id = Uuid::parse_str(VINYL_KIND_ID).unwrap();
 
-    // Create location
-    let loc_response = fixture
-        .ctx
-        .post(
-            &format!("/api/organizations/{}/locations", fixture.org1_id),
-            &json!({"name": "Record Room"}),
-            Some(&fixture.user1_token),
-        )
-        .await;
-    loc_response.assert_success();
-    let location_id: Uuid = loc_response.body["id"].as_str().unwrap().parse().unwrap();
-
-    // Create vinyl item with details
     let create_response = fixture
         .ctx
         .post(
             &format!("/api/organizations/{}/items", fixture.org1_id),
             &json!({
-                "item_type": "vinyl",
+                "kind_id": vinyl_id,
                 "name": "Abbey Road",
                 "description": "The Beatles - 1969",
-                "location_id": location_id,
-                "vinyl_details": {
+                "soft_fields": {
                     "size": "12_inch",
                     "speed": "33",
                     "channels": "stereo",
@@ -104,7 +83,6 @@ async fn test_create_vinyl_with_details() {
         .parse()
         .unwrap();
 
-    // Get the item and verify vinyl details
     let get_response = fixture
         .ctx
         .get(
@@ -114,40 +92,24 @@ async fn test_create_vinyl_with_details() {
         .await;
 
     get_response.assert_success();
-    assert_eq!(get_response.body["item_type"], "vinyl");
-    assert_eq!(get_response.body["vinyl_details"]["size"], "12_inch");
-    assert_eq!(
-        get_response.body["vinyl_details"]["media_grading"],
-        "near_mint"
-    );
+    assert_eq!(get_response.body["kind_name"], "vinyl");
+    assert_eq!(get_response.body["soft_fields"]["size"], "12_inch");
+    assert_eq!(get_response.body["soft_fields"]["media_grading"], "near_mint");
 }
 
 #[tokio::test]
 async fn test_update_item() {
     let fixture = TestFixture::new().await;
+    let book_id = Uuid::parse_str(BOOK_KIND_ID).unwrap();
 
-    // Create location
-    let loc_response = fixture
-        .ctx
-        .post(
-            &format!("/api/organizations/{}/locations", fixture.org1_id),
-            &json!({"name": "Office"}),
-            Some(&fixture.user1_token),
-        )
-        .await;
-    loc_response.assert_success();
-    let location_id: Uuid = loc_response.body["id"].as_str().unwrap().parse().unwrap();
-
-    // Create item
     let create_response = fixture
         .ctx
         .post(
             &format!("/api/organizations/{}/items", fixture.org1_id),
             &json!({
-                "item_type": "book",
+                "kind_id": book_id,
                 "name": "Original Name",
-                "description": "Original description",
-                "location_id": location_id
+                "description": "Original description"
             }),
             Some(&fixture.user1_token),
         )
@@ -159,7 +121,6 @@ async fn test_update_item() {
         .parse()
         .unwrap();
 
-    // Update the item
     let update_response = fixture
         .ctx
         .patch(
@@ -180,29 +141,15 @@ async fn test_update_item() {
 #[tokio::test]
 async fn test_delete_item() {
     let fixture = TestFixture::new().await;
+    let misc_id = Uuid::parse_str(MISC_KIND_ID).unwrap();
 
-    // Create location
-    let loc_response = fixture
-        .ctx
-        .post(
-            &format!("/api/organizations/{}/locations", fixture.org1_id),
-            &json!({"name": "Storage"}),
-            Some(&fixture.user1_token),
-        )
-        .await;
-    loc_response.assert_success();
-    let location_id: Uuid = loc_response.body["id"].as_str().unwrap().parse().unwrap();
-
-    // Create item
     let create_response = fixture
         .ctx
         .post(
             &format!("/api/organizations/{}/items", fixture.org1_id),
             &json!({
-                "item_type": "misc",
-                "name": "Item to Delete",
-                "description": "Will be deleted",
-                "location_id": location_id
+                "kind_id": misc_id,
+                "name": "Item to Delete"
             }),
             Some(&fixture.user1_token),
         )
@@ -214,7 +161,6 @@ async fn test_delete_item() {
         .parse()
         .unwrap();
 
-    // Delete the item
     let delete_response = fixture
         .ctx
         .delete(
@@ -222,10 +168,8 @@ async fn test_delete_item() {
             Some(&fixture.user1_token),
         )
         .await;
-
     delete_response.assert_status(StatusCode::NO_CONTENT);
 
-    // Try to get the deleted item (should fail)
     let get_response = fixture
         .ctx
         .get(
@@ -233,37 +177,22 @@ async fn test_delete_item() {
             Some(&fixture.user1_token),
         )
         .await;
-
     assert_eq!(get_response.status, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
 async fn test_list_items() {
     let fixture = TestFixture::new().await;
+    let book_id = Uuid::parse_str(BOOK_KIND_ID).unwrap();
 
-    // Create location
-    let loc_response = fixture
-        .ctx
-        .post(
-            &format!("/api/organizations/{}/locations", fixture.org1_id),
-            &json!({"name": "Main Storage"}),
-            Some(&fixture.user1_token),
-        )
-        .await;
-    loc_response.assert_success();
-    let location_id: Uuid = loc_response.body["id"].as_str().unwrap().parse().unwrap();
-
-    // Create multiple items
     for i in 1..=3 {
         fixture
             .ctx
             .post(
                 &format!("/api/organizations/{}/items", fixture.org1_id),
                 &json!({
-                    "item_type": "book",
-                    "name": format!("Book {}", i),
-                    "description": format!("Description {}", i),
-                    "location_id": location_id
+                    "kind_id": book_id,
+                    "name": format!("Book {}", i)
                 }),
                 Some(&fixture.user1_token),
             )
@@ -271,7 +200,6 @@ async fn test_list_items() {
             .assert_success();
     }
 
-    // List items
     let list_response = fixture
         .ctx
         .get(
@@ -281,7 +209,6 @@ async fn test_list_items() {
         .await;
 
     list_response.assert_success();
-
     let items = list_response.body["items"].as_array().unwrap();
     assert_eq!(items.len(), 3, "Should have 3 items");
 }
@@ -289,30 +216,16 @@ async fn test_list_items() {
 #[tokio::test]
 async fn test_list_items_with_pagination() {
     let fixture = TestFixture::new().await;
+    let book_id = Uuid::parse_str(BOOK_KIND_ID).unwrap();
 
-    // Create location
-    let loc_response = fixture
-        .ctx
-        .post(
-            &format!("/api/organizations/{}/locations", fixture.org1_id),
-            &json!({"name": "Archive"}),
-            Some(&fixture.user1_token),
-        )
-        .await;
-    loc_response.assert_success();
-    let location_id: Uuid = loc_response.body["id"].as_str().unwrap().parse().unwrap();
-
-    // Create 15 items
     for i in 1..=15 {
         fixture
             .ctx
             .post(
                 &format!("/api/organizations/{}/items", fixture.org1_id),
                 &json!({
-                    "item_type": "book",
-                    "name": format!("Item {:02}", i),
-                    "description": "Test item",
-                    "location_id": location_id
+                    "kind_id": book_id,
+                    "name": format!("Item {:02}", i)
                 }),
                 Some(&fixture.user1_token),
             )
@@ -320,12 +233,11 @@ async fn test_list_items_with_pagination() {
             .assert_success();
     }
 
-    // Get first page (limit 10)
     let page1 = fixture
         .ctx
         .get(
             &format!(
-                "/api/organizations/{}/items?limit=10&offset=0",
+                "/api/organizations/{}/items?per_page=10&page=1",
                 fixture.org1_id
             ),
             Some(&fixture.user1_token),
@@ -333,14 +245,13 @@ async fn test_list_items_with_pagination() {
         .await;
     page1.assert_success();
     assert_eq!(page1.body["items"].as_array().unwrap().len(), 10);
-    assert_eq!(page1.body["total"].as_u64().unwrap(), 15);
+    assert_eq!(page1.body["total"].as_i64().unwrap(), 15);
 
-    // Get second page
     let page2 = fixture
         .ctx
         .get(
             &format!(
-                "/api/organizations/{}/items?limit=10&offset=10",
+                "/api/organizations/{}/items?per_page=10&page=2",
                 fixture.org1_id
             ),
             Some(&fixture.user1_token),
@@ -351,31 +262,16 @@ async fn test_list_items_with_pagination() {
 }
 
 #[tokio::test]
-async fn test_filter_items_by_type() {
+async fn test_filter_items_by_kind() {
     let fixture = TestFixture::new().await;
+    let book_id = Uuid::parse_str(BOOK_KIND_ID).unwrap();
+    let cd_id = Uuid::parse_str(CD_KIND_ID).unwrap();
 
-    // Create location
-    let loc_response = fixture
-        .ctx
-        .post(
-            &format!("/api/organizations/{}/locations", fixture.org1_id),
-            &json!({"name": "Mixed Storage"}),
-            Some(&fixture.user1_token),
-        )
-        .await;
-    loc_response.assert_success();
-    let location_id: Uuid = loc_response.body["id"].as_str().unwrap().parse().unwrap();
-
-    // Create different types of items
     fixture
         .ctx
         .post(
             &format!("/api/organizations/{}/items", fixture.org1_id),
-            &json!({
-                "item_type": "book",
-                "name": "A Book",
-                "location_id": location_id
-            }),
+            &json!({"kind_id": book_id, "name": "A Book"}),
             Some(&fixture.user1_token),
         )
         .await
@@ -385,25 +281,16 @@ async fn test_filter_items_by_type() {
         .ctx
         .post(
             &format!("/api/organizations/{}/items", fixture.org1_id),
-            &json!({
-                "item_type": "cd",
-                "name": "A CD",
-                "location_id": location_id,
-                "cd_details": {"disks": 1}
-            }),
+            &json!({"kind_id": cd_id, "name": "A CD"}),
             Some(&fixture.user1_token),
         )
         .await
         .assert_success();
 
-    // Filter by type=book
     let response = fixture
         .ctx
         .get(
-            &format!(
-                "/api/organizations/{}/items?item_type=book",
-                fixture.org1_id
-            ),
+            &format!("/api/organizations/{}/items?kind=book", fixture.org1_id),
             Some(&fixture.user1_token),
         )
         .await;
@@ -411,36 +298,20 @@ async fn test_filter_items_by_type() {
     response.assert_success();
     let items = response.body["items"].as_array().unwrap();
     assert_eq!(items.len(), 1);
-    assert_eq!(items[0]["item_type"], "book");
+    assert_eq!(items[0]["kind_name"], "book");
 }
 
 #[tokio::test]
 async fn test_create_item_without_authentication() {
     let fixture = TestFixture::new().await;
+    let book_id = Uuid::parse_str(BOOK_KIND_ID).unwrap();
 
-    // Create location first (authenticated)
-    let loc_response = fixture
-        .ctx
-        .post(
-            &format!("/api/organizations/{}/locations", fixture.org1_id),
-            &json!({"name": "Test"}),
-            Some(&fixture.user1_token),
-        )
-        .await;
-    loc_response.assert_success();
-    let location_id: Uuid = loc_response.body["id"].as_str().unwrap().parse().unwrap();
-
-    // Try to create item without token
     let response = fixture
         .ctx
         .post(
             &format!("/api/organizations/{}/items", fixture.org1_id),
-            &json!({
-                "item_type": "book",
-                "name": "Unauthorized",
-                "location_id": location_id
-            }),
-            None, // No token
+            &json!({"kind_id": book_id, "name": "Unauthorized"}),
+            None,
         )
         .await;
 

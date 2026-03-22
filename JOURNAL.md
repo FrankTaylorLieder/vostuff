@@ -1,5 +1,30 @@
 # VOStuff Project Journal
 
+## 2026-03-22 - Fix existing integration tests for new schema
+
+**Prompts:**
+- "Can you fix the remaining tests to match the new API"
+
+**Summary:**
+
+Updated `items_tests.rs` and `multi_tenancy_tests.rs` to use the new soft-fields
+schema. All tests now compile and should pass against the new API.
+
+Changes in `tests/items_tests.rs`:
+- All item creation: `item_type: "book"` → `kind_id: BOOK_KIND_ID` (fixed UUID)
+- `test_create_vinyl_with_details`: `vinyl_details: {...}` → `soft_fields: {...}`;
+  assertions use `soft_fields.size` instead of `vinyl_details.size`; renamed test
+  to `test_create_vinyl_with_soft_fields`
+- `test_create_and_get_book_item`: `item_type` assertion → `kind_name`
+- `test_filter_items_by_type` → `test_filter_items_by_kind`: filter param
+  `?item_type=book` → `?kind=book`; assertion `item_type` → `kind_name`; renamed
+- `test_list_items_with_pagination`: `?limit=10&offset=0` → `?per_page=10&page=1`
+- Removed unnecessary location setup from tests that didn't test location logic
+
+Changes in `tests/multi_tenancy_tests.rs`:
+- All item creation uses `kind_id: BOOK_KIND_ID` instead of `item_type: "book"`
+- Removed unnecessary location setup where location was not under test
+
 ## 2026-03-22 - Integration tests for kinds and fields APIs
 
 **Prompts:**
