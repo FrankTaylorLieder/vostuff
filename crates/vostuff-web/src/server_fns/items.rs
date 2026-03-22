@@ -90,7 +90,7 @@ pub struct PaginatedResponse<T> {
 
 /// Helper function to extract auth token from cookies (server-side only)
 #[cfg(feature = "ssr")]
-async fn get_auth_token() -> Result<String, ServerFnError<NoCustomError>> {
+pub(crate) async fn get_auth_token() -> Result<String, ServerFnError<NoCustomError>> {
     use axum::http::header::COOKIE;
     use leptos_axum::extract;
 

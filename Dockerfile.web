@@ -8,13 +8,26 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     perl \
     build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install cargo-leptos (latest version compatible with Rust 1.86)
-RUN cargo install cargo-leptos
+# Install cargo-leptos from pre-built binary (avoids OOM from compiling with LTO)
+RUN set -e; \
+    ARCH=$(uname -m); \
+    if [ "$ARCH" = "aarch64" ]; then TARGET="aarch64-unknown-linux-musl"; \
+    elif [ "$ARCH" = "x86_64" ]; then TARGET="x86_64-unknown-linux-musl"; \
+    else echo "Unsupported arch: $ARCH" && exit 1; fi; \
+    curl -fsSL "https://github.com/leptos-rs/cargo-leptos/releases/download/v0.3.5/cargo-leptos-${TARGET}.tar.gz" \
+    | tar -xz --strip-components=1 -C /usr/local/bin "cargo-leptos-${TARGET}/cargo-leptos" && \
+    chmod +x /usr/local/bin/cargo-leptos
 
 # Add wasm target
 RUN rustup target add wasm32-unknown-unknown
+
+# Pre-install wasm-bindgen-cli to match project's wasm-bindgen version.
+# Cargo-leptos auto-downloads it but the 0.2.103 prebuilt binary doesn't exist,
+# so we compile it here (much smaller than cargo-leptos, no OOM risk).
+RUN cargo install wasm-bindgen-cli --version 0.2.103
 
 # Set working directory
 WORKDIR /app
@@ -47,7 +60,7 @@ RUN useradd -m -u 1001 vostuff
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /app/target/release/web-server /usr/local/bin/web-server
+COPY --from=builder /app/target/release/vostuff-web /usr/local/bin/vostuff-web
 
 # Copy Leptos configuration
 COPY --from=builder /app/Leptos.toml ./
@@ -71,4 +84,4 @@ EXPOSE 3001
 ENV LEPTOS_SITE_ADDR="0.0.0.0:3001"
 
 # Run the web server
-CMD ["web-server"]
+CMD ["vostuff-web"]

@@ -10,6 +10,7 @@ use crate::components::items_table::ItemsTable;
 use crate::components::pagination::Pagination;
 use crate::server_fns::auth::{UserInfo, get_current_user};
 use crate::server_fns::items::{ItemFilters, ItemState, get_items, get_locations};
+use crate::server_fns::kinds::get_kinds;
 
 #[component]
 pub fn HomePage() -> impl IntoView {
@@ -78,6 +79,12 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
         |org_id| async move { get_locations(org_id).await },
     );
 
+    // Fetch kinds once for the type filter dropdown
+    let kinds_resource = create_resource(
+        move || org_id,
+        |org_id| async move { get_kinds(org_id).await },
+    );
+
     // Fetch items with pagination and filters
     // Convert HashSets to sorted Vecs for stable comparison in resource source
     let items_resource = create_resource(
@@ -144,19 +151,6 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
         },
     );
 
-    // Build filter options for types (stored for reuse in reactive context)
-    // TODO: replace with a dynamic fetch from the kinds API (TODO item 2)
-    let type_options = store_value(vec![
-        FilterOption { value: "vinyl".to_string(),       label: "Vinyl".to_string() },
-        FilterOption { value: "cd".to_string(),          label: "CD".to_string() },
-        FilterOption { value: "cassette".to_string(),    label: "Cassette".to_string() },
-        FilterOption { value: "book".to_string(),        label: "Book".to_string() },
-        FilterOption { value: "score".to_string(),       label: "Score".to_string() },
-        FilterOption { value: "electronics".to_string(), label: "Electronics".to_string() },
-        FilterOption { value: "misc".to_string(),        label: "Misc".to_string() },
-        FilterOption { value: "dvd".to_string(),         label: "DVD".to_string() },
-    ]);
-
     // Build filter options for states (stored for reuse in reactive context)
     let state_options = store_value(
         ItemState::all()
@@ -183,8 +177,8 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                     {move || {
                         let locations_result = locations_resource.get();
                         let items_result = items_resource.get();
-                        match (locations_result, items_result) {
-                            (Some(Ok(locations)), Some(Ok(paginated))) => {
+                        match (locations_result, items_result, kinds_resource.get()) {
+                            (Some(Ok(locations)), Some(Ok(paginated)), Some(Ok(kinds))) => {
                                 // Build location map for table display
                                 let location_map: HashMap<uuid::Uuid, String> = locations
                                     .iter()
@@ -196,6 +190,14 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                                     .map(|loc| FilterOption {
                                         value: loc.id.to_string(),
                                         label: loc.name.clone(),
+                                    })
+                                    .collect();
+                                // Build kind options for type filter
+                                let type_options: Vec<FilterOption> = kinds
+                                    .iter()
+                                    .map(|k| FilterOption {
+                                        value: k.name.clone(),
+                                        label: k.display_name.clone().unwrap_or_else(|| k.name.clone()),
                                     })
                                     .collect();
                                 let has_filters = !selected_types.get().is_empty()
@@ -211,7 +213,7 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                                         />
                                         <FilterDropdown
                                             label="Type"
-                                            options=type_options.get_value()
+                                            options=type_options
                                             selected=selected_types
                                             set_selected=set_selected_types
                                         />
@@ -287,7 +289,7 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                                 }
                                     .into_view()
                             }
-                            (Some(Err(e)), _) | (_, Some(Err(e))) => {
+                            (Some(Err(e)), _, _) | (_, Some(Err(e)), _) | (_, _, Some(Err(e))) => {
                                 view! {
                                     <div class="error">{format!("Error loading data: {}", e)}</div>
                                 }
