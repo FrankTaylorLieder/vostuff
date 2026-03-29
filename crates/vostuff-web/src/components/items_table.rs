@@ -4,10 +4,13 @@ use uuid::Uuid;
 
 use pulldown_cmark::{Options, Parser, html};
 
+use crate::components::soft_field_helpers::{
+    format_field_name, format_soft_field_value, render_soft_field_input, value_to_edit_str,
+};
 use crate::server_fns::items::{
     Item, ItemFullDetails, ItemState, Location, UpdateItemRequest, get_item_details, update_item,
 };
-use crate::server_fns::kinds::{get_kind_fields, KindEnumValue, KindFieldDef};
+use crate::server_fns::kinds::{get_kind_fields, KindFieldDef};
 
 fn render_markdown(text: &str) -> String {
     let options = Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES;
@@ -172,29 +175,6 @@ pub fn ItemsTable(
     }
 }
 
-fn value_to_edit_str(v: &serde_json::Value) -> String {
-    match v {
-        serde_json::Value::String(s) => s.clone(),
-        serde_json::Value::Number(n) => n.to_string(),
-        serde_json::Value::Bool(b) => b.to_string(),
-        serde_json::Value::Null => String::new(),
-        _ => v.to_string(),
-    }
-}
-
-fn format_field_name(name: &str) -> String {
-    name.split('_')
-        .map(|word| {
-            let mut chars = word.chars();
-            match chars.next() {
-                None => String::new(),
-                Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 fn render_soft_fields(soft_fields: &serde_json::Value) -> View {
     let Some(obj) = soft_fields.as_object() else {
         return ().into_view();
@@ -225,36 +205,6 @@ fn render_soft_fields(soft_fields: &serde_json::Value) -> View {
         </div>
     }
     .into_view()
-}
-
-fn format_soft_field_value(
-    field_type: &str,
-    raw: &serde_json::Value,
-    enum_values: &[KindEnumValue],
-) -> String {
-    let s = match raw {
-        serde_json::Value::String(s) => s.clone(),
-        serde_json::Value::Number(n) => n.to_string(),
-        serde_json::Value::Bool(b) => b.to_string(),
-        other => other.to_string(),
-    };
-    match field_type {
-        "boolean" => {
-            if s == "true" {
-                "Yes".to_string()
-            } else if s == "false" {
-                "No".to_string()
-            } else {
-                s
-            }
-        }
-        "enum" => enum_values
-            .iter()
-            .find(|ev| ev.value == s)
-            .and_then(|ev| ev.display_value.clone())
-            .unwrap_or(s),
-        _ => s,
-    }
 }
 
 fn render_soft_fields_with_defs(
@@ -428,27 +378,30 @@ fn ItemExpandedRow(
             .unwrap_or_default(),
     );
 
-    // Soft field signals — one per entry in item.soft_fields
-    let soft_field_entries: Vec<(String, ReadSignal<String>, WriteSignal<String>)> = item
+    // Soft field signals — HashMap-based, shared across all kind-defined fields
+    let init_map: HashMap<String, String> = item
         .soft_fields
         .as_object()
         .cloned()
         .unwrap_or_default()
         .into_iter()
-        .map(|(k, v)| {
-            let (r, w) = create_signal(value_to_edit_str(&v));
-            (k, r, w)
-        })
+        .map(|(k, v)| (k, value_to_edit_str(&v)))
         .collect();
-    let soft_field_entries = store_value(soft_field_entries);
-    let orig_soft_fields = store_value(item.soft_fields.clone());
+    let orig_soft_field_map = store_value(init_map.clone());
+    let soft_field_map = create_rw_signal(init_map);
     let soft_fields_stored = store_value(item.soft_fields.clone());
     let kind_id_stored = item.kind_id;
 
-    let kind_fields_resource = create_resource(
-        move || (org_id, kind_id_stored),
-        move |(org_id, kind_id)| async move { get_kind_fields(org_id, kind_id).await },
-    );
+    // Use spawn_local (not create_resource) to avoid triggering the parent <Suspense>
+    // boundary in home.rs, which would cause a scroll-to-top on row expand.
+    let kind_fields = create_rw_signal::<Vec<KindFieldDef>>(vec![]);
+    spawn_local(async move {
+        if let Ok(fields) = get_kind_fields(org_id, kind_id_stored).await {
+            kind_fields.set(fields);
+        }
+    });
+
+    let (save_error, set_save_error) = create_signal::<Option<String>>(None);
 
     // Loan signals
     let (edit_loan_date_loaned, set_edit_loan_date_loaned) = create_signal(String::new());
@@ -473,10 +426,11 @@ fn ItemExpandedRow(
     let init_edit_from_details = move || {
         if let Some(details) = fetched_details.get() {
             if let Some(obj) = details.item.soft_fields.as_object() {
-                for (k, _, set_w) in soft_field_entries.get_value().iter() {
-                    let val = obj.get(k).map(value_to_edit_str).unwrap_or_default();
-                    set_w.set(val);
-                }
+                soft_field_map.update(|m| {
+                    for (k, v) in obj.iter() {
+                        m.insert(k.clone(), value_to_edit_str(v));
+                    }
+                });
             }
             if let Some(ref loan) = details.loan_details {
                 set_edit_loan_date_loaned.set(loan.date_loaned.format("%Y-%m-%d").to_string());
@@ -516,12 +470,7 @@ fn ItemExpandedRow(
         set_edit_notes.set(orig_notes.get_value());
         set_edit_location_id.set(orig_location_id.get_value());
         set_edit_date_acquired.set(orig_date_acquired.get_value());
-        if let Some(obj) = orig_soft_fields.get_value().as_object() {
-            for (k, _, set_w) in soft_field_entries.get_value().iter() {
-                let val = obj.get(k).map(value_to_edit_str).unwrap_or_default();
-                set_w.set(val);
-            }
-        }
+        soft_field_map.set(orig_soft_field_map.get_value());
         init_edit_from_details();
         set_editing.set(false);
     };
@@ -536,18 +485,29 @@ fn ItemExpandedRow(
         let location_str = edit_location_id.get();
         let date_acq_str = edit_date_acquired.get();
 
-        // Collect soft fields
-        let sf_map: serde_json::Map<String, serde_json::Value> = soft_field_entries
-            .get_value()
-            .iter()
-            .map(|(k, r, _)| {
-                let s = r.get();
+        // Collect soft fields with type-aware conversion
+        let raw_map = soft_field_map.get_untracked();
+        let field_type_map: HashMap<String, String> = kind_fields
+            .get_untracked()
+            .into_iter()
+            .map(|f| (f.name.clone(), f.field_type.clone()))
+            .collect();
+        let sf_map: serde_json::Map<String, serde_json::Value> = raw_map
+            .into_iter()
+            .map(|(k, s)| {
                 let v = if s.is_empty() {
                     serde_json::Value::Null
                 } else {
-                    serde_json::Value::String(s)
+                    match field_type_map.get(&k).map(|ft| ft.as_str()) {
+                        Some("number") => s
+                            .parse::<f64>()
+                            .map(|n| serde_json::json!(n))
+                            .unwrap_or_else(|_| serde_json::Value::String(s)),
+                        Some("boolean") => serde_json::Value::Bool(s == "true"),
+                        _ => serde_json::Value::String(s),
+                    }
                 };
-                (k.clone(), v)
+                (k, v)
             })
             .collect();
 
@@ -623,7 +583,9 @@ fn ItemExpandedRow(
                 }
                 Err(e) => {
                     set_saving.set(false);
-                    leptos::logging::error!("Failed to save item: {}", e);
+                    let msg = format!("{}", e);
+                    leptos::logging::error!("Failed to save item: {}", msg);
+                    set_save_error.set(Some(msg));
                 }
             }
         }
@@ -679,9 +641,11 @@ fn ItemExpandedRow(
                                     </div>
                                     {move || {
                                         let sf = soft_fields_stored.get_value();
-                                        match kind_fields_resource.get() {
-                                            Some(Ok(fields)) => render_soft_fields_with_defs(&sf, &fields),
-                                            _ => render_soft_fields(&sf),
+                                        let fields = kind_fields.get();
+                                        if fields.is_empty() {
+                                            render_soft_fields(&sf)
+                                        } else {
+                                            render_soft_fields_with_defs(&sf, &fields)
                                         }
                                     }}
                                     <Suspense fallback=move || view! { <div class="loading">"Loading details..."</div> }>
@@ -787,48 +751,30 @@ fn ItemExpandedRow(
                                         </div>
                                     </div>
 
-                                    // Soft fields edit section
-                                    {
-                                        let entries = soft_field_entries.get_value();
-                                        if entries.is_empty() {
-                                            ().into_view()
+                                    // Soft fields edit section — type-specific inputs
+                                    {move || {
+                                        let fields = kind_fields.get();
+                                        if fields.is_empty() {
+                                            render_soft_fields_edit_fallback(soft_field_map)
                                         } else {
-                                            view! {
-                                                <div class="detail-section">
-                                                    <h4>"Details"</h4>
-                                                    {entries
-                                                        .into_iter()
-                                                        .map(|(k, r, set_w)| {
-                                                            let label = format_field_name(&k);
-                                                            view! {
-                                                                <div class="detail-row">
-                                                                    <div class="detail-group">
-                                                                        <span class="detail-label">{label + ":"}</span>
-                                                                        <input
-                                                                            type="text"
-                                                                            class="edit-input"
-                                                                            prop:value=r
-                                                                            on:input=move |ev| set_w.set(event_target_value(&ev))
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            }
-                                                        })
-                                                        .collect_view()}
-                                                </div>
-                                            }
-                                            .into_view()
+                                            render_soft_fields_edit_with_defs(&fields, soft_field_map)
                                         }
-                                    }
+                                    }}
 
                                     // State-specific edit fields
                                     {render_state_edit_fields(&is, edit_loan_date_loaned, set_edit_loan_date_loaned, edit_loan_date_due_back, set_edit_loan_date_due_back, edit_loan_loaned_to, set_edit_loan_loaned_to, edit_missing_date, set_edit_missing_date, edit_disposed_date, set_edit_disposed_date)}
 
+                                    <Show when=move || save_error.get().is_some() fallback=|| ()>
+                                        <div class="error">
+                                            {move || save_error.get().unwrap_or_default()}
+                                        </div>
+                                    </Show>
                                     <div class="detail-actions">
                                         <button
                                             class="btn btn-ok"
                                             prop:disabled=saving
                                             on:click=move |_| {
+                                                set_save_error.set(None);
                                                 set_saving.set(true);
                                                 save_action.dispatch(());
                                             }
@@ -911,4 +857,85 @@ fn render_state_edit_fields(
         }.into_view(),
         _ => ().into_view(),
     }
+}
+
+fn render_soft_fields_edit_with_defs(
+    kind_fields: &[KindFieldDef],
+    soft_field_map: RwSignal<HashMap<String, String>>,
+) -> View {
+    if kind_fields.is_empty() {
+        return ().into_view();
+    }
+
+    let mut sorted: Vec<KindFieldDef> = kind_fields.to_vec();
+    sorted.sort_by_key(|f| f.display_order);
+
+    view! {
+        <div class="detail-section">
+            <h4>"Details"</h4>
+            {sorted
+                .into_iter()
+                .map(|field_def| {
+                    let name = field_def.name.clone();
+                    let label = field_def
+                        .display_name
+                        .clone()
+                        .unwrap_or_else(|| format_field_name(&name));
+                    let ft = field_def.field_type.clone();
+                    let enum_values = field_def.enum_values.clone();
+                    view! {
+                        <div class="detail-row">
+                            <div class="detail-group">
+                                <span class="detail-label">{label + ":"}</span>
+                                {render_soft_field_input(name, ft, enum_values, soft_field_map)}
+                            </div>
+                        </div>
+                    }
+                })
+                .collect_view()}
+        </div>
+    }
+    .into_view()
+}
+
+fn render_soft_fields_edit_fallback(
+    soft_field_map: RwSignal<HashMap<String, String>>,
+) -> View {
+    let entries: Vec<String> = soft_field_map.get_untracked().into_keys().collect();
+    if entries.is_empty() {
+        return ().into_view();
+    }
+    view! {
+        <div class="detail-section">
+            <h4>"Details"</h4>
+            {entries
+                .into_iter()
+                .map(|k| {
+                    let label = format_field_name(&k);
+                    let name = k.clone();
+                    view! {
+                        <div class="detail-row">
+                            <div class="detail-group">
+                                <span class="detail-label">{label + ":"}</span>
+                                <input
+                                    type="text"
+                                    class="edit-input"
+                                    prop:value=move || {
+                                        soft_field_map.with(|m| m.get(&name).cloned().unwrap_or_default())
+                                    }
+                                    on:input=move |ev| {
+                                        let v = event_target_value(&ev);
+                                        soft_field_map.update(|m| {
+                                            m.insert(k.clone(), v);
+                                        });
+                                    }
+                                />
+                            </div>
+                        </div>
+                    }
+                })
+                .collect_view()}
+        </div>
+    }
+    .into_view()
 }

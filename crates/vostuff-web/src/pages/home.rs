@@ -2,6 +2,7 @@ use leptos::*;
 use leptos_router::*;
 use std::collections::{HashMap, HashSet};
 
+use crate::components::create_item::CreateItemModal;
 use crate::components::filter_dropdown::{
     FilterBar, FilterDropdown, FilterOption, FilterSearchInput,
 };
@@ -41,6 +42,9 @@ pub fn HomePage() -> impl IntoView {
 #[component]
 fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
     let org_id = user_info.organization.id;
+
+    // Modal visibility
+    let (show_create, set_show_create) = create_signal(false);
 
     // Pagination state
     let (page, set_page) = create_signal(1i64);
@@ -168,8 +172,25 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                 username=user_info.name.clone()
                 org_name=user_info.organization.name.clone()
             />
+            <CreateItemModal
+                org_id=org_id
+                show=show_create
+                on_close=Callback::new(move |_| set_show_create.set(false))
+                on_created=Callback::new(move |_| {
+                    set_show_create.set(false);
+                    set_refresh_counter.update(|c| *c += 1);
+                })
+            />
             <div class="container">
-                <h1>"Items"</h1>
+                <div class="page-header">
+                    <h1>"Items"</h1>
+                    <button
+                        class="btn btn-primary"
+                        on:click=move |_| set_show_create.set(true)
+                    >
+                        "Add Item"
+                    </button>
+                </div>
 
                 <Suspense fallback=move || {
                     view! { <div class="loading">"Loading..."</div> }

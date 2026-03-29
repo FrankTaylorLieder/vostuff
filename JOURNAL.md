@@ -1,5 +1,64 @@
 # VOStuff Project Journal
 
+## 2026-03-29 - Fix scroll-to-top on row expand
+
+**Prompts:**
+- "For later: bug: when scrolled down the list, if you expand an item the screens updates to the top of the list rather than leaving the expanded item on screen."
+- "Can you fix the scroll to top error now."
+
+**Summary:**
+
+Fixed a bug where expanding an item row caused the page to scroll back to the top.
+
+**Root cause**: `kind_fields_resource` in `ItemExpandedRow` was created with `create_resource`. In Leptos 0.6, `create_resource` participates in the nearest `<Suspense>` ancestor. When a row expanded and `ItemExpandedRow` mounted, `kind_fields_resource` began loading and signalled the outer `<Suspense>` in `home.rs`, which briefly showed its loading fallback (removing `ItemsTable` from the DOM), then restored the content. This DOM replacement reset the browser's scroll position.
+
+**Fix** (`components/items_table.rs`):
+- Replaced `create_resource` for `kind_fields_resource` with `spawn_local` + `RwSignal<Vec<KindFieldDef>>`. `spawn_local` fires off a future without registering it with any Suspense boundary, so the outer Suspense is never interrupted.
+- Removed the now-unnecessary `kind_fields_for_save: StoredValue` + `create_effect` indirection; `save_action` now reads `kind_fields.get_untracked()` directly from the `RwSignal`.
+- View usages updated to branch on `fields.is_empty()` (while loading) vs populated.
+
+## 2026-03-29 - Fix edit item save regression
+
+**Prompts:**
+- "The edit item dialogue does not work. Adding text to the note and clicking OK, results in the no change. The button flickers and returns to say OK and text is not saved."
+
+**Summary:**
+
+Fixed a regression introduced in the TODO item 7 implementation: the edit-item save was failing silently, causing the "Saving..." button to flicker back to "OK" with no change persisted.
+
+**Root cause**: `kind_fields_resource.get()` was called inside `create_action`'s closure (the synchronous part that runs when the action is dispatched). In Leptos 0.6, calling `.get()` on a `Resource` inside this context can return stale/`None` values, making `field_type_map` empty and causing all soft fields to be sent as `Value::String`. The API's `validate_soft_fields` function strictly rejects string values for `number` and `boolean` typed fields, returning a 400 error that caused the whole PATCH to fail (including the `notes` base field).
+
+**Fix**:
+1. Added `kind_fields_for_save: StoredValue<Vec<KindFieldDef>>` populated via `create_effect` that tracks `kind_fields_resource`. The save_action reads from this `StoredValue` (a stable, non-reactive read) instead of calling `kind_fields_resource.get()` directly.
+2. Added `save_error: ReadSignal<Option<String>>` signal; in the `Err` branch of the save effect, set the error message. Display it above the action buttons so save failures are visible to the user. Clear the error on next OK click.
+
+## 2026-03-29 - Soft-field-aware item create and edit UI (TODO item 7)
+
+**Prompts:**
+- "Implement the following plan: # Plan: Soft-Field-Aware Item Create and Edit UI (TODO Item 7) ..."
+
+**Summary:**
+
+Implemented full soft-field-aware create and edit UI for items.
+
+**Edit mode** (`components/items_table.rs`):
+- Replaced the `soft_field_entries` Vec of per-field signals with a single `RwSignal<HashMap<String,String>>` (`soft_field_map`) for unified soft field state management
+- Refactored `cancel_edit` to restore via `orig_soft_field_map.get_value()` (one line instead of iterating)
+- Refactored `init_edit_from_details` to update the map from fetched details
+- Updated `save_action` to perform type-aware JSON conversion using `kind_fields_resource` field type data: `number` fields → `Value::Number`, `boolean` → `Value::Bool`, rest → `Value::String`
+- Replaced the old generic-text-input edit section with reactive `render_soft_fields_edit_with_defs` (all kind-defined fields in `display_order` with type-specific controls: enum→select, boolean→checkbox, number→number, date→date, datetime→datetime-local, text→textarea) and `render_soft_fields_edit_fallback` (text inputs for existing fields when resource not loaded)
+
+**New module** (`components/soft_field_helpers.rs`):
+- Extracted shared helpers `value_to_edit_str`, `format_field_name`, `format_soft_field_value`, `render_soft_field_input` into a new module used by both `items_table.rs` and `create_item.rs`
+
+**Create mode**:
+- Added `CreateItemRequest` struct and `create_item` server fn to `server_fns/items.rs` (calls `POST /api/organizations/{org_id}/items`)
+- Created new `components/create_item.rs` with `CreateItemModal` component: kind select (fetches kinds), name (required), description, notes, location select, date acquired, dynamic soft fields section (appears when kind selected, type-specific inputs in `display_order`), validation, error display, save/cancel
+- Added "Add Item" button to home page header; clicking opens the modal; on success calls `on_created` which increments `refresh_counter` to reload the item list
+- `components/mod.rs` updated to declare `create_item` and `soft_field_helpers` modules
+
+Compilation: `SQLX_OFFLINE=true cargo check --package vostuff-web` and `cargo clippy --package vostuff-web` both clean (no new warnings).
+
 ## 2026-03-22 - Item detail view for soft fields (TODO item 8)
 
 **Prompts:**

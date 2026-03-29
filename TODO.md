@@ -103,20 +103,22 @@ New page accessible from the org settings area:
   - Edit org field: change display_name, manage enum values
   - Delete org field (disabled if referenced by any kind)
 
-### 7. Update item create/edit UI for soft fields
+### ~~7. Update item create/edit UI for soft fields~~ ✓ DONE
 
-The item create and edit forms need to be soft-field-aware:
+Completed 2026-03-29. Full soft-field-aware create and edit UI implemented:
 
-- On create: user selects a kind; the form dynamically shows the soft fields
-  for that kind with appropriate input controls per type:
-  - `string`/`text` → text input / textarea
-  - `number` → number input
-  - `boolean` → checkbox
-  - `date` → date picker
-  - `datetime` → datetime picker
-  - `enum` → select/dropdown with allowed values
-- On edit: load the item's kind, fetch its field definitions, render current
-  `soft_fields` values into the form
+**Edit mode** (`components/items_table.rs`):
+- Replaced `soft_field_entries` Vec with `RwSignal<HashMap<String,String>>`
+- Type-specific edit inputs via `render_soft_fields_edit_with_defs`: enum→select, boolean→checkbox, number→number input, date→date picker, datetime→datetime-local, text→textarea, string→text input
+- `kind_fields` fetched via `spawn_local` + `RwSignal` (not `create_resource`) to avoid triggering the outer `<Suspense>` boundary and causing scroll-to-top on row expand
+- All kind-defined fields shown (not just those already in `soft_fields`)
+- Type-aware JSON conversion on save (number→`Value::Number`, boolean→`Value::Bool`)
+- Shared helpers moved to `components/soft_field_helpers.rs`
+
+**Create mode**:
+- `CreateItemRequest` struct + `create_item` server fn added to `server_fns/items.rs`
+- New `components/create_item.rs` with `CreateItemModal` component (kind select, name, description, notes, location, date acquired, dynamic soft fields section)
+- "Add Item" button on home page opens modal; on success refreshes item list
 
 ### ~~8. Fix item detail view for soft fields~~ ✓ DONE
 
