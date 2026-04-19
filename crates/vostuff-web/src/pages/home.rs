@@ -192,7 +192,7 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                     </button>
                 </div>
 
-                <Suspense fallback=move || {
+                <Transition fallback=move || {
                     view! { <div class="loading">"Loading..."</div> }
                 }>
                     {move || {
@@ -321,7 +321,7 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                             }
                         }
                     }}
-                </Suspense>
+                </Transition>
             </div>
         </div>
     }

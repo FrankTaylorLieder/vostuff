@@ -154,3 +154,9 @@ Completed 2026-03-22. `GET /organizations/:org_id/kinds/:kind_id/fields/:field_i
 added to `kinds.rs` as `get_field_impact`. Returns `{ "item_count": N }`.
 The `update_field` handler (item 4) also hard-blocks removal of enum values
 in use by items with a 409 and clear error message.
+
+## Other TODO items
+
+1. Add location add/edit/remove value editing options. Inline with the dropdown.
+1. Add clear x button in search box
+1. Enable item delete

@@ -378,14 +378,14 @@ fn ItemExpandedRow(
             .unwrap_or_default(),
     );
 
-    // Soft field signals — HashMap-based, shared across all kind-defined fields
-    let init_map: HashMap<String, String> = item
+    // Soft field signals — store serde_json::Value directly so types are
+    // preserved through edit and save without any guessing at save time.
+    let init_map: HashMap<String, serde_json::Value> = item
         .soft_fields
         .as_object()
         .cloned()
         .unwrap_or_default()
         .into_iter()
-        .map(|(k, v)| (k, value_to_edit_str(&v)))
         .collect();
     let orig_soft_field_map = store_value(init_map.clone());
     let soft_field_map = create_rw_signal(init_map);
@@ -425,10 +425,30 @@ fn ItemExpandedRow(
     // Initialize edit signals from details when entering edit mode
     let init_edit_from_details = move || {
         if let Some(details) = fetched_details.get() {
+            // Update base fields from the freshly-fetched details so re-entering
+            // edit mode after a save shows the current saved values.
+            set_edit_name.set(details.item.name.clone());
+            set_edit_description
+                .set(details.item.description.clone().unwrap_or_default());
+            set_edit_notes.set(details.item.notes.clone().unwrap_or_default());
+            set_edit_location_id.set(
+                details
+                    .item
+                    .location_id
+                    .map(|id| id.to_string())
+                    .unwrap_or_default(),
+            );
+            set_edit_date_acquired.set(
+                details
+                    .item
+                    .date_acquired
+                    .map(|d| d.format("%Y-%m-%d").to_string())
+                    .unwrap_or_default(),
+            );
             if let Some(obj) = details.item.soft_fields.as_object() {
                 soft_field_map.update(|m| {
                     for (k, v) in obj.iter() {
-                        m.insert(k.clone(), value_to_edit_str(v));
+                        m.insert(k.clone(), v.clone());
                     }
                 });
             }
@@ -485,31 +505,10 @@ fn ItemExpandedRow(
         let location_str = edit_location_id.get();
         let date_acq_str = edit_date_acquired.get();
 
-        // Collect soft fields with type-aware conversion
-        let raw_map = soft_field_map.get_untracked();
-        let field_type_map: HashMap<String, String> = kind_fields
-            .get_untracked()
-            .into_iter()
-            .map(|f| (f.name.clone(), f.field_type.clone()))
-            .collect();
-        let sf_map: serde_json::Map<String, serde_json::Value> = raw_map
-            .into_iter()
-            .map(|(k, s)| {
-                let v = if s.is_empty() {
-                    serde_json::Value::Null
-                } else {
-                    match field_type_map.get(&k).map(|ft| ft.as_str()) {
-                        Some("number") => s
-                            .parse::<f64>()
-                            .map(|n| serde_json::json!(n))
-                            .unwrap_or_else(|_| serde_json::Value::String(s)),
-                        Some("boolean") => serde_json::Value::Bool(s == "true"),
-                        _ => serde_json::Value::String(s),
-                    }
-                };
-                (k, v)
-            })
-            .collect();
+        // Values are already correctly typed (stored as serde_json::Value by
+        // the input handlers), so no conversion is needed here.
+        let sf_map: serde_json::Map<String, serde_json::Value> =
+            soft_field_map.get_untracked().into_iter().collect();
 
         let mut req = UpdateItemRequest {
             name: Some(name),
@@ -526,7 +525,10 @@ fn ItemExpandedRow(
                 chrono::NaiveDate::parse_from_str(&date_acq_str, "%Y-%m-%d").ok()
             },
             state: None,
-            soft_fields: Some(serde_json::Value::Object(sf_map)),
+            // Serialize to a JSON string — serde_urlencoded (used by Leptos
+            // server fn transport) loses type info for nested serde_json::Value,
+            // so we pass it as a plain string and parse it back server-side.
+            soft_fields: serde_json::to_string(&serde_json::Value::Object(sf_map)).ok(),
             loan_date_loaned: None,
             loan_date_due_back: None,
             loan_loaned_to: None,
@@ -861,7 +863,7 @@ fn render_state_edit_fields(
 
 fn render_soft_fields_edit_with_defs(
     kind_fields: &[KindFieldDef],
-    soft_field_map: RwSignal<HashMap<String, String>>,
+    soft_field_map: RwSignal<HashMap<String, serde_json::Value>>,
 ) -> View {
     if kind_fields.is_empty() {
         return ().into_view();
@@ -899,7 +901,7 @@ fn render_soft_fields_edit_with_defs(
 }
 
 fn render_soft_fields_edit_fallback(
-    soft_field_map: RwSignal<HashMap<String, String>>,
+    soft_field_map: RwSignal<HashMap<String, serde_json::Value>>,
 ) -> View {
     let entries: Vec<String> = soft_field_map.get_untracked().into_keys().collect();
     if entries.is_empty() {
@@ -921,11 +923,25 @@ fn render_soft_fields_edit_fallback(
                                     type="text"
                                     class="edit-input"
                                     prop:value=move || {
-                                        soft_field_map.with(|m| m.get(&name).cloned().unwrap_or_default())
+                                        soft_field_map.with(|m| {
+                                            m.get(&name).map(|v| value_to_edit_str(v)).unwrap_or_default()
+                                        })
                                     }
                                     on:input=move |ev| {
-                                        let v = event_target_value(&ev);
+                                        let s = event_target_value(&ev);
                                         soft_field_map.update(|m| {
+                                            // Preserve the original JSON type when re-entering a value
+                                            let v = match m.get(&k) {
+                                                Some(serde_json::Value::Number(_)) => {
+                                                    if let Ok(i) = s.parse::<i64>() { serde_json::json!(i) }
+                                                    else if let Ok(f) = s.parse::<f64>() { serde_json::json!(f) }
+                                                    else { serde_json::Value::String(s.clone()) }
+                                                }
+                                                Some(serde_json::Value::Bool(_)) => {
+                                                    serde_json::Value::Bool(s == "true")
+                                                }
+                                                _ => serde_json::Value::String(s.clone()),
+                                            };
                                             m.insert(k.clone(), v);
                                         });
                                     }

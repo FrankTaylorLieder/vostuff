@@ -1,5 +1,55 @@
 # VOStuff Project Journal
 
+## 2026-04-19 - Fix scroll-to-top on save
+
+**Prompts:**
+- "Now, when I select save, the list jumps back to the top instead of staying on the current item."
+
+**Summary:**
+
+After a save, `on_item_updated` incremented `refresh_counter`, causing `items_resource` to refetch. The `<Suspense>` boundary in `home.rs` then showed its loading fallback, removing `ItemsTable` from the DOM and resetting the browser scroll position.
+
+Fix (`pages/home.rs`): Replaced `<Suspense>` with `<Transition>` for the main content area. `<Transition>` shows its fallback only on the initial load; on subsequent refetches it keeps the previous DOM content visible until new data arrives. This prevents `ItemsTable` from ever leaving the DOM during a refetch, so scroll position is preserved.
+
+## 2026-04-19 - Fix edit soft fields type corruption and stale location on re-enter
+
+**Prompts:**
+- "Can you fix the scroll to top error now." (continued from previous session)
+- "There are still bugs in the OK of edit. error running server function: Failed to update item: 400 Bad Request - {\"error\":\"invalid_soft_fields\",\"message\":\"Field 'disks' must be a number\"}"
+- "Add to TODO list: enable item delete."
+- "Can you summarise where this project is, and what is next?"
+- "I've just seen this error when saving a change to an item: error running server function: Failed to update item: 400 Bad Request - {\"error\":\"invalid_soft_fields\",\"message\":\"Field 'disks' must be a number\"}"
+- "Great. That's fixed. Now when editing. I change the location. The item saves and shows the updated value. But when I hit edit again, the value is not set."
+
+**Summary:**
+
+Two bugs fixed across this session:
+
+**Bug 1: "Field 'disks' must be a number" on edit save**
+
+Root cause: Leptos 0.6 server functions use `application/x-www-form-urlencoded` (`serde_urlencoded`) to transport arguments from WASM to the SSR server. This serialization strips JSON type information — `serde_json::Value::Number(1)` becomes the string `"1"` by the time the SSR side sees it. The SSR server then forwarded a string `"1"` to the API for the `disks` field, but the API's `validate_soft_fields` requires `Value::Number`.
+
+Fix: Changed `UpdateItemRequest.soft_fields` and `CreateItemRequest.soft_fields` from `Option<serde_json::Value>` to `Option<String>` (a JSON-encoded string). The WASM side serializes the map to a JSON string before transport; the SSR server function parses it back to `serde_json::Value` before forwarding to the API. This round-trips through `serde_urlencoded` safely because a plain string survives intact.
+
+Also changed the `soft_field_map` signal type from `HashMap<String, String>` to `HashMap<String, serde_json::Value>` throughout (items_table.rs, soft_field_helpers.rs, create_item.rs) so that input handlers store correctly typed values at input time (number→`Value::Number`, boolean→`Value::Bool`), making save_action trivial (just collect the map and serialize to a JSON string).
+
+Files changed: `server_fns/items.rs`, `components/items_table.rs`, `components/soft_field_helpers.rs`, `components/create_item.rs`.
+
+**Bug 2: Location not restored when re-entering edit mode after a save**
+
+Root cause: `init_edit_from_details()` was called when entering edit mode to sync edit signals from freshly-fetched item details. However, it only updated `soft_field_map`, loan/missing/disposed signals — it never updated the base field signals (`edit_name`, `edit_description`, `edit_notes`, `edit_location_id`, `edit_date_acquired`). After a successful save, `details_resource` was re-fetched (correct), but `edit_location_id` remained at its component-mount-time value (stale). Clicking Edit a second time showed the pre-save location.
+
+Fix (`components/items_table.rs`): Added updates for all base fields at the start of `init_edit_from_details`:
+- `set_edit_name.set(details.item.name.clone())`
+- `set_edit_description.set(details.item.description.clone().unwrap_or_default())`
+- `set_edit_notes.set(details.item.notes.clone().unwrap_or_default())`
+- `set_edit_location_id.set(details.item.location_id.map(|id| id.to_string()).unwrap_or_default())`
+- `set_edit_date_acquired.set(details.item.date_acquired.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default())`
+
+Also added "Enable item delete" to TODO.md Other TODO items.
+
+Compilation: `SQLX_OFFLINE=true cargo check --package vostuff-web` — clean, no new warnings.
+
 ## 2026-03-29 - Fix scroll-to-top on row expand
 
 **Prompts:**

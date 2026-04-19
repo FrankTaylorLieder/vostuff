@@ -200,8 +200,11 @@ pub struct UpdateItemRequest {
     pub date_acquired: Option<chrono::NaiveDate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<ItemState>,
+    // Soft fields are JSON-encoded as a String for transport (serde_urlencoded
+    // loses type information for nested serde_json::Value). The server fn
+    // parses it back before forwarding to the API.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub soft_fields: Option<serde_json::Value>,
+    pub soft_fields: Option<String>,
     // Loan
     #[serde(skip_serializing_if = "Option::is_none")]
     pub loan_date_loaned: Option<chrono::NaiveDate>,
@@ -234,11 +237,25 @@ pub async fn update_item(
         api_base_url, org_id, item_id
     );
 
+    // Build the JSON body: start from the request struct, then replace the
+    // soft_fields string with the actual parsed JSON value so the API receives
+    // the correct types (number, bool, etc.).
+    let mut body = serde_json::to_value(&req).map_err(|e| {
+        ServerFnError::<NoCustomError>::ServerError(format!("Serialization error: {}", e))
+    })?;
+    if let Some(sf_str) = &req.soft_fields {
+        if let (Ok(sf_val), Some(obj)) =
+            (serde_json::from_str(sf_str), body.as_object_mut())
+        {
+            obj.insert("soft_fields".to_string(), sf_val);
+        }
+    }
+
     let client = reqwest::Client::new();
     let response = client
         .patch(&url)
         .header("Authorization", format!("Bearer {}", token))
-        .json(&req)
+        .json(&body)
         .send()
         .await
         .map_err(|e| {
@@ -372,7 +389,8 @@ pub struct CreateItemRequest {
     pub notes: Option<String>,
     pub location_id: Option<Uuid>,
     pub date_acquired: Option<chrono::NaiveDate>,
-    pub soft_fields: Option<serde_json::Value>,
+    // JSON-encoded string for transport; parsed back in the server fn.
+    pub soft_fields: Option<String>,
 }
 
 /// Create a new item via the POST API
@@ -388,11 +406,22 @@ pub async fn create_item(
 
     let url = format!("{}/api/organizations/{}/items", api_base_url, org_id);
 
+    let mut body = serde_json::to_value(&req).map_err(|e| {
+        ServerFnError::<NoCustomError>::ServerError(format!("Serialization error: {}", e))
+    })?;
+    if let Some(sf_str) = &req.soft_fields {
+        if let (Ok(sf_val), Some(obj)) =
+            (serde_json::from_str(sf_str), body.as_object_mut())
+        {
+            obj.insert("soft_fields".to_string(), sf_val);
+        }
+    }
+
     let client = reqwest::Client::new();
     let response = client
         .post(&url)
         .header("Authorization", format!("Bearer {}", token))
-        .json(&req)
+        .json(&body)
         .send()
         .await
         .map_err(|e| {
