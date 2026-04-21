@@ -1,5 +1,34 @@
 # VOStuff Project Journal
 
+## 2026-04-20 - Kinds & Fields Management UI (TODO item 6)
+
+**Prompts:**
+- "Implement the following plan: # Plan: Kinds & Fields Management UI (TODO Item 6) [full plan]"
+- "Continue"
+
+**Summary:**
+
+Implemented the full settings page with Kinds and Fields management tabs (TODO item 6).
+
+**New files:**
+- `crates/vostuff-web/src/pages/settings.rs` — auth-gated settings page with tab bar (Kinds / Fields tabs). Same auth pattern as `home.rs`.
+- `crates/vostuff-web/src/components/kinds_manager.rs` — Kinds tab UI. Lists shared kinds (read-only, with Override button) and org-owned kinds (Edit, Revert, Delete per row). Includes `CreateKindModal` and `EditKindModal` with two-column field picker (click-to-add, ↑↓ reorder, × remove). `EditKindModal` shows data-loss warning and Force Save button when the API returns `data_loss_required`.
+- `crates/vostuff-web/src/components/fields_manager.rs` — Fields tab UI. Lists shared fields (read-only) and org fields (Edit, Delete). `CreateFieldModal` with type select and inline enum value editor. `EditFieldModal` for display_name and enum value management.
+- `crates/vostuff-web/src/server_fns/fields.rs` — New server functions: `get_fields`, `create_field`, `update_field`, `delete_field`, with `Field` and `FieldEnumValue` types.
+
+**Modified files:**
+- `server_fns/kinds.rs` — Added `Kind` and `RevertResponse` types plus `get_kinds_full`, `create_kind`, `update_kind`, `delete_kind`, `override_kind`, `revert_kind` server functions.
+- `server_fns/mod.rs` — Added `pub mod fields;`
+- `components/mod.rs` — Added `pub mod kinds_manager; pub mod fields_manager;`
+- `pages/mod.rs` — Added `pub mod settings;`
+- `app.rs` — Added `<Route path="/settings" view=SettingsPage/>`
+- `components/header.rs` — Added "Settings" nav link (uses `leptos_router::A`).
+- `style/main.css` — Added ~150 lines of CSS: tab bar, management rows, badges (field-type, shared, kind-field chips), field picker columns, enum value editor rows, data-loss warning, `.btn-sm`.
+
+`SQLX_OFFLINE=true cargo check --package vostuff-web` — clean compile (only pre-existing warnings). `cargo clippy` — no new warnings. `cargo test` — all passing.
+
+---
+
 ## 2026-04-19 - Fix scroll-to-top on save
 
 **Prompts:**

@@ -88,29 +88,91 @@ body {
   color: #555;
 }
 
-.form-input {
+.form-input,
+.form-control {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid #d0d0d0;
   border-radius: 4px;
   font-size: 14px;
+  font-family: inherit;
   transition: border-color 0.2s;
+  box-sizing: border-box;
 }
 
-.form-input:focus {
+.form-input:focus,
+.form-control:focus {
   outline: none;
   border-color: #4A90E2;
   box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
 }
 
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #555;
+  font-size: 14px;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  width: 560px;
+  max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #e1e4e8;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.modal-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e1e4e8;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 /* Buttons */
 .btn {
+  display: inline-block;
   padding: 10px 20px;
   border: none;
   border-radius: 4px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
+  text-decoration: none;
   transition: all 0.2s;
 }
 
@@ -730,4 +792,177 @@ body {
 /* Search Highlight */
 .search-highlight {
   background-color: #fff9c4;
+}
+
+/* ── Settings page ─────────────────────────────────────────────────────────── */
+
+/* Tab bar */
+.tab-bar {
+  display: flex;
+  border-bottom: 2px solid #e1e4e8;
+  margin-bottom: 24px;
+}
+.tab-btn {
+  padding: 10px 20px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  font-size: 14px;
+  color: #555;
+}
+.tab-btn.active {
+  border-bottom-color: #4A90E2;
+  color: #4A90E2;
+  font-weight: 600;
+}
+.tab-btn:hover:not(.active) {
+  color: #333;
+}
+
+/* Management rows */
+.mgmt-section {
+  margin-bottom: 32px;
+}
+.mgmt-section h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #777;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.mgmt-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: white;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+.mgmt-row-name {
+  font-weight: 500;
+  min-width: 130px;
+}
+.mgmt-row-display {
+  color: #666;
+  font-size: 13px;
+  min-width: 130px;
+}
+.mgmt-row-meta {
+  color: #888;
+  font-size: 13px;
+  flex: 1;
+}
+.mgmt-row-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.mgmt-row-error {
+  color: #d73a49;
+  font-size: 12px;
+  margin-top: 4px;
+  padding-left: 14px;
+}
+
+/* Badges */
+.field-type-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #e8f0fe;
+  color: #3b5bdb;
+  font-weight: 500;
+}
+.shared-badge {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: #f1f3f5;
+  color: #868e96;
+}
+.kind-field-chip {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 7px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  margin: 2px;
+}
+
+/* Field picker in modals */
+.field-picker {
+  display: flex;
+  gap: 16px;
+  margin: 12px 0;
+}
+.field-picker-available,
+.field-picker-selected {
+  flex: 1;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  padding: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  min-height: 80px;
+}
+.field-picker-item {
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.field-picker-item:hover {
+  background: #f0f4ff;
+}
+.field-picker-selected-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+}
+.field-picker-selected-row span {
+  flex: 1;
+  font-size: 13px;
+}
+
+/* Enum value editor */
+.enum-val-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.enum-val-row input {
+  flex: 1;
+}
+.btn-reorder {
+  padding: 1px 7px;
+  font-size: 12px;
+}
+
+/* Data-loss warning */
+.data-loss-warning {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-left-width: 4px;
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin: 10px 0;
+  font-size: 13px;
+}
+.data-loss-warning strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* Small button variant */
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
 }

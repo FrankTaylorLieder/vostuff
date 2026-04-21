@@ -84,24 +84,24 @@ Completed 2026-03-22. `pub mod fields;` added to `mod.rs`, all 5 field routes
 and the impact route wired into `build_router`. OpenAPI schemas and paths
 registered in `api_server.rs`.
 
-### 6. New UI: kinds and fields management page
+### ~~6. New UI: kinds and fields management page~~ ✓ DONE
 
-New page accessible from the org settings area:
+Completed 2026-04-20. New `/settings` route with tab bar:
 
-- **Kinds tab**: lists shared kinds (read-only) and org kinds (editable).
-  Each kind shows its fields in order. Actions:
-  - "Override" on a shared kind → copy it to org (calls override endpoint)
-  - "Revert" on an org-overridden kind → revert to shared
-  - "New kind" → create form (name, display_name, select fields to include)
-  - Edit an org kind: change display_name, add/remove fields, drag to reorder
-  - Delete an org kind (disabled if items use it)
-
-- **Fields tab**: lists shared fields (read-only) and org fields (editable).
-  Actions:
-  - "New field" → form: name (immutable after creation), display_name, type;
-    if type=enum: inline enum value editor (value + display_value, drag to reorder)
-  - Edit org field: change display_name, manage enum values
-  - Delete org field (disabled if referenced by any kind)
+- `pages/settings.rs` — auth gate + tab bar (Kinds / Fields)
+- `components/kinds_manager.rs` — lists shared (read-only with Override button) and
+  org kinds (Edit, Revert, Delete). Create/Edit modals with two-column field picker
+  (click to add, ↑↓ reorder, × remove). Edit shows data-loss warning and Force Save
+  button when API returns `data_loss_required`.
+- `components/fields_manager.rs` — lists shared (read-only) and org fields.
+  Create modal with type select and inline enum-value editor (for enum fields).
+  Edit modal for display_name and enum values.
+- `server_fns/kinds.rs` extended with `Kind`, `RevertResponse`, `get_kinds_full`,
+  `create_kind`, `update_kind`, `delete_kind`, `override_kind`, `revert_kind`.
+- `server_fns/fields.rs` new with `Field`, `FieldEnumValue`, `get_fields`,
+  `create_field`, `update_field`, `delete_field`.
+- "Settings" nav link added to header.
+- CSS: tab bar, management rows, badges, field picker, enum editor, data-loss warning.
 
 ### ~~7. Update item create/edit UI for soft fields~~ ✓ DONE
 
@@ -160,3 +160,4 @@ in use by items with a 409 and clear error message.
 1. Add location add/edit/remove value editing options. Inline with the dropdown.
 1. Add clear x button in search box
 1. Enable item delete
+1. Improve "Add item" layout
