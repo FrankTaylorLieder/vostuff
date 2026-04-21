@@ -1,5 +1,28 @@
 # VOStuff Project Journal
 
+## 2026-04-21 - Update CLZ importer for new schema (TODO item 9)
+
+**Prompts:**
+
+1. Implement the following plan: Update CLZ Importer for New Schema (TODO Item 9)
+
+**Summary:**
+
+Updated `crates/vostuff-api/src/bin/clz_importer.rs` to work with the
+soft-fields schema:
+
+- Added `KindSummary { id, name }` struct for deserialising the kinds list API
+- Replaced `item_type: String` with `kind_id: Uuid` in `CreateItemRequest`
+- Added `lookup_kind_id` async fn that calls `GET /organizations/:org_id/kinds`
+  and finds the named kind (fails fast if not found)
+- `main()` now looks up the "dvd" kind UUID immediately after authentication
+- `import_items` signature extended with `kind_id: Uuid`; all
+  `CreateItemRequest` constructions use it
+- `SQLX_OFFLINE=true cargo build --bin clz-importer` compiles cleanly
+- Marked TODO item 9 as done
+
+---
+
 ## 2026-04-20 - Kinds & Fields Management UI (TODO item 6)
 
 **Prompts:**

@@ -130,13 +130,16 @@ by `display_order`, labelled with `display_name`, enums resolved to `display_val
 booleans rendered as "Yes"/"No". Falls back to the old `render_soft_fields` while
 the resource is loading or on error.
 
-### 9. Update CLZ importer
+### ~~9. Update CLZ importer~~ ✓ DONE
 
-`crates/vostuff-api/src/bin/clz_importer.rs` still uses the old `item_type`
-enum and detail table inserts. Update to:
-- Look up kind IDs by name at startup (vinyl, cd, etc.)
-- Build `soft_fields` JSONB when creating items
-- Remove all detail table inserts
+Completed 2026-04-21. `clz_importer.rs` updated:
+- Added `KindSummary` struct for deserialising the kinds API response
+- Replaced `item_type: String` with `kind_id: Uuid` in `CreateItemRequest`
+- Added `lookup_kind_id` async fn that calls `GET /organizations/:org_id/kinds`
+  and finds the kind by name (case-sensitive)
+- `main()` now looks up the "dvd" kind UUID after authentication and before import
+- `import_items` accepts a `kind_id: Uuid` parameter and uses it in every request
+- No `soft_fields` needed — omitting it is equivalent to `{}`
 
 ### ~~10. Fix integration tests~~ ✓ DONE
 

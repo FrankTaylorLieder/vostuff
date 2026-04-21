@@ -98,10 +98,17 @@ struct SelectOrgRequest {
     organization_id: Uuid,
 }
 
+/// Kind summary from the kinds API
+#[derive(Deserialize)]
+struct KindSummary {
+    id: Uuid,
+    name: String,
+}
+
 /// Create item request
 #[derive(Serialize)]
 struct CreateItemRequest {
-    item_type: String,
+    kind_id: Uuid,
     name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     notes: Option<String>,
@@ -160,9 +167,14 @@ async fn main() -> Result<()> {
     .await?;
     println!("Authentication successful!");
 
+    // Look up DVD kind
+    println!("Looking up DVD kind...");
+    let dvd_kind_id = lookup_kind_id(&client, &args.api_url, &token, org_id, "dvd").await?;
+    println!("DVD kind id: {}", dvd_kind_id);
+
     // Import items
     println!("\nImporting items...\n");
-    let stats = import_items(&client, &args.api_url, &token, org_id, &records).await?;
+    let stats = import_items(&client, &args.api_url, &token, org_id, dvd_kind_id, &records).await?;
 
     // Print summary
     println!("\n=== Import Summary ===");
@@ -371,12 +383,41 @@ async fn authenticate(
     Ok((login_resp.token, selected_org.id))
 }
 
+/// Look up the UUID for a kind by name
+async fn lookup_kind_id(
+    client: &Client,
+    api_url: &str,
+    token: &str,
+    org_id: Uuid,
+    kind_name: &str,
+) -> Result<Uuid> {
+    let resp = client
+        .get(format!("{}/api/organizations/{}/kinds", api_url, org_id))
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .context("Failed to fetch kinds")?;
+
+    if !resp.status().is_success() {
+        bail!("Failed to fetch kinds: {}", resp.status());
+    }
+
+    let kinds: Vec<KindSummary> = resp.json().await.context("Failed to parse kinds")?;
+
+    kinds
+        .into_iter()
+        .find(|k| k.name == kind_name)
+        .map(|k| k.id)
+        .ok_or_else(|| anyhow::anyhow!("Kind '{}' not found in organisation", kind_name))
+}
+
 /// Import items into vostuff
 async fn import_items(
     client: &Client,
     api_url: &str,
     token: &str,
     org_id: Uuid,
+    kind_id: Uuid,
     records: &[ClzRecord],
 ) -> Result<ImportStats> {
     let mut stats = ImportStats {
@@ -400,7 +441,7 @@ async fn import_items(
 
         // Create item request
         let create_req = CreateItemRequest {
-            item_type: "dvd".to_string(),
+            kind_id,
             name: record.title.clone(),
             notes,
             date_acquired,
