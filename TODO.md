@@ -164,3 +164,5 @@ in use by items with a 409 and clear error message.
 1. Add clear x button in search box
 1. Enable item delete
 1. Improve "Add item" layout
+1. Discogs importer
+1. Import/export (generic CSV or JSON)
