@@ -1,5 +1,55 @@
 # VOStuff Project Journal
 
+## 2026-04-25 - Restyle item add/edit forms to match field modal UX
+
+**Prompts:**
+
+1. Can you improve the UX of the item add/edit dlg. Make it styled similar to the Edit Field dlg.
+
+**Summary:**
+
+Three files updated to align the item add/edit forms with the existing field modal style:
+
+- **`create_item.rs`**: Added `modal-header`/`modal-body`/`modal-footer` structure to the
+  Add Item modal. Changed all `edit-input`/`edit-select` → `form-control`. Removed colons
+  from labels. Changed buttons to `btn-secondary` (Cancel) and `btn-primary` (Save).
+  `render_kind_fields_section` uses the same section-heading style as the field editor.
+
+- **`soft_field_helpers.rs`**: Changed all `edit-input` → `form-control`,
+  `edit-select` → `form-control`, `edit-textarea` → `form-control` with inline
+  `min-height`/`resize` style.
+
+- **`items_table.rs`**: Edit mode form switched from `detail-row`/`detail-group`/
+  `detail-label` layout to `form-group`/`form-label` vertical stack with `form-control`
+  inputs. Section headings (Details, Loan Details, etc.) use the same uppercase label
+  style. Buttons changed to `btn-secondary` (Cancel) / `btn-primary` (Save).
+
+---
+
+## 2026-04-25 - Fix enum field editor focus loss bug
+
+**Prompts:**
+
+1. Bug: When editing an enum field, the add value textbox only allows me to type one character before the focus is moved away. Can you fix this.
+
+**Summary:**
+
+Root cause: `EnumValueEditor` used a `{move || rows.get()...}` reactive closure to render
+all input rows. Every keystroke updated the `rows` signal, causing the entire closure to
+re-execute and recreate all DOM nodes — destroying the focused input.
+
+Fix in `crates/vostuff-web/src/components/fields_manager.rs`:
+- Changed row type from `Vec<(String, String)>` to `Vec<(u32, String, String)>` to carry
+  a stable integer key alongside each value/display-value pair
+- `EnumValueEditor` now uses `<For key=|(id,_,_)| *id>` instead of the reactive closure;
+  Leptos diffs the key list and preserves existing DOM nodes for unchanged keys
+- A `next_key` signal inside `EnumValueEditor` provides monotonically increasing IDs for
+  newly added rows
+- `CreateFieldModal` and `EditFieldModal` updated to use the new tuple type; save actions
+  strip the key with `(_, v, dv)` destructuring
+
+---
+
 ## 2026-04-21 - Update CLZ importer for new schema (TODO item 9)
 
 **Prompts:**

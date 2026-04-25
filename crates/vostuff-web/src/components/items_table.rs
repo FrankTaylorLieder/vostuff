@@ -687,70 +687,63 @@ fn ItemExpandedRow(
                                 let locs = locations_for_edit.clone();
                                 let is = item_state_for_view.clone();
                                 view! {
-                                    <div class="detail-row">
-                                        <div class="detail-group">
-                                            <span class="detail-label">"Name:"</span>
-                                            <input
-                                                type="text"
-                                                class="edit-input"
-                                                prop:value=edit_name
-                                                on:input=move |ev| set_edit_name.set(event_target_value(&ev))
-                                            />
-                                        </div>
+                                    <div class="form-group">
+                                        <label class="form-label">"Name"</label>
+                                        <input
+                                            type="text"
+                                            class="form-control"
+                                            prop:value=edit_name
+                                            on:input=move |ev| set_edit_name.set(event_target_value(&ev))
+                                        />
                                     </div>
-                                    <div class="detail-row">
-                                        <div class="detail-group">
-                                            <span class="detail-label">"Description:"</span>
-                                            <input
-                                                type="text"
-                                                class="edit-input"
-                                                prop:value=edit_description
-                                                on:input=move |ev| set_edit_description.set(event_target_value(&ev))
-                                            />
-                                        </div>
+                                    <div class="form-group">
+                                        <label class="form-label">"Description"</label>
+                                        <input
+                                            type="text"
+                                            class="form-control"
+                                            prop:value=edit_description
+                                            on:input=move |ev| set_edit_description.set(event_target_value(&ev))
+                                        />
                                     </div>
-                                    <div class="detail-row">
-                                        <div class="detail-group">
-                                            <span class="detail-label">"Notes:"</span>
-                                            <textarea
-                                                class="edit-textarea"
-                                                prop:value=edit_notes
-                                                on:input=move |ev| set_edit_notes.set(event_target_value(&ev))
-                                            />
-                                        </div>
+                                    <div class="form-group">
+                                        <label class="form-label">"Notes"</label>
+                                        <textarea
+                                            class="form-control"
+                                            style="min-height:80px;resize:vertical;"
+                                            prop:value=edit_notes
+                                            on:input=move |ev| set_edit_notes.set(event_target_value(&ev))
+                                        />
                                     </div>
-                                    <div class="detail-row">
-                                        <div class="detail-group">
-                                            <span class="detail-label">"Location:"</span>
-                                            <select
-                                                class="edit-select"
-                                                prop:value=edit_location_id
-                                                on:change=move |ev| set_edit_location_id.set(event_target_value(&ev))
-                                            >
-                                                <option value="">"- None -"</option>
-                                                {locs
-                                                    .iter()
-                                                    .map(|loc| {
-                                                        let val = loc.id.to_string();
-                                                        let name = loc.name.clone();
-                                                        view! { <option value=val>{name}</option> }
-                                                    })
-                                                    .collect_view()}
-                                            </select>
-                                        </div>
-                                        <div class="detail-group">
-                                            <span class="detail-label">"Date Acquired:"</span>
-                                            <input
-                                                type="date"
-                                                class="edit-input"
-                                                prop:value=edit_date_acquired
-                                                on:input=move |ev| set_edit_date_acquired.set(event_target_value(&ev))
-                                            />
-                                        </div>
-                                        <div class="detail-group">
-                                            <span class="detail-label">"Type:"</span>
-                                            <span class="detail-value">{kind_name_for_edit.clone()}</span>
-                                        </div>
+                                    <div class="form-group">
+                                        <label class="form-label">"Location"</label>
+                                        <select
+                                            class="form-control"
+                                            prop:value=edit_location_id
+                                            on:change=move |ev| set_edit_location_id.set(event_target_value(&ev))
+                                        >
+                                            <option value="">"- None -"</option>
+                                            {locs
+                                                .iter()
+                                                .map(|loc| {
+                                                    let val = loc.id.to_string();
+                                                    let name = loc.name.clone();
+                                                    view! { <option value=val>{name}</option> }
+                                                })
+                                                .collect_view()}
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">"Date Acquired"</label>
+                                        <input
+                                            type="date"
+                                            class="form-control"
+                                            prop:value=edit_date_acquired
+                                            on:input=move |ev| set_edit_date_acquired.set(event_target_value(&ev))
+                                        />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">"Type"</label>
+                                        <span class="detail-value">{kind_name_for_edit.clone()}</span>
                                     </div>
 
                                     // Soft fields edit section — type-specific inputs
@@ -773,7 +766,15 @@ fn ItemExpandedRow(
                                     </Show>
                                     <div class="detail-actions">
                                         <button
-                                            class="btn btn-ok"
+                                            class="btn btn-secondary"
+                                            prop:disabled=saving
+                                            on:click=move |_| cancel_edit()
+                                        >
+                                            "Cancel"
+                                        </button>
+                                        <button
+                                            class="btn btn-primary"
+                                            style="width:auto;"
                                             prop:disabled=saving
                                             on:click=move |_| {
                                                 set_save_error.set(None);
@@ -781,14 +782,7 @@ fn ItemExpandedRow(
                                                 save_action.dispatch(());
                                             }
                                         >
-                                            {move || if saving.get() { "Saving..." } else { "OK" }}
-                                        </button>
-                                        <button
-                                            class="btn btn-cancel"
-                                            prop:disabled=saving
-                                            on:click=move |_| cancel_edit()
-                                        >
-                                            "Cancel"
+                                            {move || if saving.get() { "Saving..." } else { "Save" }}
                                         </button>
                                     </div>
                                 }.into_view()
@@ -817,43 +811,43 @@ fn render_state_edit_fields(
 ) -> View {
     match state {
         ItemState::Loaned => view! {
-            <div class="detail-section">
-                <h4>"Loan Details"</h4>
-                <div class="detail-row">
-                    <div class="detail-group">
-                        <span class="detail-label">"Date Loaned:"</span>
-                        <input type="date" class="edit-input" prop:value=edit_loan_date_loaned on:input=move |ev| set_edit_loan_date_loaned.set(event_target_value(&ev)) />
-                    </div>
-                    <div class="detail-group">
-                        <span class="detail-label">"Date Due Back:"</span>
-                        <input type="date" class="edit-input" prop:value=edit_loan_date_due_back on:input=move |ev| set_edit_loan_date_due_back.set(event_target_value(&ev)) />
-                    </div>
-                    <div class="detail-group">
-                        <span class="detail-label">"Loaned To:"</span>
-                        <input type="text" class="edit-input" prop:value=edit_loan_loaned_to on:input=move |ev| set_edit_loan_loaned_to.set(event_target_value(&ev)) />
-                    </div>
+            <div>
+                <div style="font-size:12px;font-weight:600;color:#777;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 8px;">
+                    "Loan Details"
+                </div>
+                <div class="form-group">
+                    <label class="form-label">"Date Loaned"</label>
+                    <input type="date" class="form-control" prop:value=edit_loan_date_loaned on:input=move |ev| set_edit_loan_date_loaned.set(event_target_value(&ev)) />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">"Date Due Back"</label>
+                    <input type="date" class="form-control" prop:value=edit_loan_date_due_back on:input=move |ev| set_edit_loan_date_due_back.set(event_target_value(&ev)) />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">"Loaned To"</label>
+                    <input type="text" class="form-control" prop:value=edit_loan_loaned_to on:input=move |ev| set_edit_loan_loaned_to.set(event_target_value(&ev)) />
                 </div>
             </div>
         }.into_view(),
         ItemState::Missing => view! {
-            <div class="detail-section">
-                <h4>"Missing Details"</h4>
-                <div class="detail-row">
-                    <div class="detail-group">
-                        <span class="detail-label">"Date Missing:"</span>
-                        <input type="date" class="edit-input" prop:value=edit_missing_date on:input=move |ev| set_edit_missing_date.set(event_target_value(&ev)) />
-                    </div>
+            <div>
+                <div style="font-size:12px;font-weight:600;color:#777;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 8px;">
+                    "Missing Details"
+                </div>
+                <div class="form-group">
+                    <label class="form-label">"Date Missing"</label>
+                    <input type="date" class="form-control" prop:value=edit_missing_date on:input=move |ev| set_edit_missing_date.set(event_target_value(&ev)) />
                 </div>
             </div>
         }.into_view(),
         ItemState::Disposed => view! {
-            <div class="detail-section">
-                <h4>"Disposed Details"</h4>
-                <div class="detail-row">
-                    <div class="detail-group">
-                        <span class="detail-label">"Date Disposed:"</span>
-                        <input type="date" class="edit-input" prop:value=edit_disposed_date on:input=move |ev| set_edit_disposed_date.set(event_target_value(&ev)) />
-                    </div>
+            <div>
+                <div style="font-size:12px;font-weight:600;color:#777;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 8px;">
+                    "Disposed Details"
+                </div>
+                <div class="form-group">
+                    <label class="form-label">"Date Disposed"</label>
+                    <input type="date" class="form-control" prop:value=edit_disposed_date on:input=move |ev| set_edit_disposed_date.set(event_target_value(&ev)) />
                 </div>
             </div>
         }.into_view(),
@@ -873,8 +867,10 @@ fn render_soft_fields_edit_with_defs(
     sorted.sort_by_key(|f| f.display_order);
 
     view! {
-        <div class="detail-section">
-            <h4>"Details"</h4>
+        <div>
+            <div style="font-size:12px;font-weight:600;color:#777;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 8px;">
+                "Details"
+            </div>
             {sorted
                 .into_iter()
                 .map(|field_def| {
@@ -886,11 +882,9 @@ fn render_soft_fields_edit_with_defs(
                     let ft = field_def.field_type.clone();
                     let enum_values = field_def.enum_values.clone();
                     view! {
-                        <div class="detail-row">
-                            <div class="detail-group">
-                                <span class="detail-label">{label + ":"}</span>
-                                {render_soft_field_input(name, ft, enum_values, soft_field_map)}
-                            </div>
+                        <div class="form-group">
+                            <label class="form-label">{label}</label>
+                            {render_soft_field_input(name, ft, enum_values, soft_field_map)}
                         </div>
                     }
                 })

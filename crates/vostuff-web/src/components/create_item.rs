@@ -54,15 +54,19 @@ pub fn CreateItemModal(
         |org_id| async move { get_locations(org_id).await },
     );
 
-    let kind_fields_resource = create_resource(
-        move || (org_id, kind_id.get()),
-        move |(org_id, kid)| async move {
-            match kid {
-                Some(kid) => get_kind_fields(org_id, kid).await,
-                None => Ok(vec![]),
-            }
-        },
-    );
+    // Use spawn_local (not create_resource) to avoid triggering the parent Suspense boundary
+    let kind_fields = create_rw_signal::<Vec<KindFieldDef>>(vec![]);
+    create_effect(move |_| {
+        let kid = kind_id.get();
+        kind_fields.set(vec![]);
+        if let Some(kid) = kid {
+            spawn_local(async move {
+                if let Ok(fields) = get_kind_fields(org_id, kid).await {
+                    kind_fields.set(fields);
+                }
+            });
+        }
+    });
 
     let save_action = create_action(move |_: &()| {
         let kid = kind_id.get_untracked();
@@ -133,119 +137,126 @@ pub fn CreateItemModal(
 
     view! {
         <Show when=move || show.get() fallback=|| ()>
-            <div
-                class="modal-overlay"
-                on:click=move |_| close_and_reset()
-            >
-                <div
-                    class="modal"
-                    on:click=move |ev| ev.stop_propagation()
-                >
-                    <h2>"Add Item"</h2>
-                    <div class="form-group">
-                        <label class="form-label">"Type:"</label>
-                        <Suspense fallback=|| view! { <span>"Loading..."</span> }>
+            <div class="modal-overlay" on:click=move |_| close_and_reset()>
+                <div class="modal" on:click=move |ev| ev.stop_propagation()>
+                    <div class="modal-header">
+                        <h2>"Add Item"</h2>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>"Type"</label>
+                            <Suspense fallback=|| view! { <span>"Loading..."</span> }>
+                                {move || {
+                                    let kinds = kinds_resource.get()
+                                        .and_then(|r| r.ok())
+                                        .unwrap_or_default();
+                                    view! {
+                                        <select
+                                            class="form-control"
+                                            prop:value=move || kind_id.get().map(|id| id.to_string()).unwrap_or_default()
+                                            on:change=move |ev| {
+                                                let val = event_target_value(&ev);
+                                                kind_id.set(Uuid::parse_str(&val).ok());
+                                            }
+                                        >
+                                            <option value="">"- Select Type -"</option>
+                                            {kinds.into_iter().map(|k| {
+                                                let val = k.id.to_string();
+                                                let label = k.display_name.unwrap_or_else(|| k.name.clone());
+                                                view! { <option value=val>{label}</option> }
+                                            }).collect_view()}
+                                        </select>
+                                    }
+                                }}
+                            </Suspense>
+                        </div>
+                        <div class="form-group">
+                            <label>"Name"</label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                prop:value=name
+                                on:input=move |ev| name.set(event_target_value(&ev))
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label>"Description"</label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                prop:value=description
+                                on:input=move |ev| description.set(event_target_value(&ev))
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label>"Notes"</label>
+                            <textarea
+                                class="form-control"
+                                style="min-height:80px;resize:vertical;"
+                                prop:value=notes
+                                on:input=move |ev| notes.set(event_target_value(&ev))
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label>"Location"</label>
+                            <Suspense fallback=|| view! { <span>"Loading..."</span> }>
+                                {move || {
+                                    let locs: Vec<Location> = locations_resource.get()
+                                        .and_then(|r| r.ok())
+                                        .unwrap_or_default();
+                                    view! {
+                                        <select
+                                            class="form-control"
+                                            prop:value=location_id
+                                            on:change=move |ev| location_id.set(event_target_value(&ev))
+                                        >
+                                            <option value="">"- None -"</option>
+                                            {locs.into_iter().map(|loc| {
+                                                let val = loc.id.to_string();
+                                                let lname = loc.name.clone();
+                                                view! { <option value=val>{lname}</option> }
+                                            }).collect_view()}
+                                        </select>
+                                    }
+                                }}
+                            </Suspense>
+                        </div>
+                        <div class="form-group">
+                            <label>"Date Acquired"</label>
+                            <input
+                                type="date"
+                                class="form-control"
+                                prop:value=date_acquired
+                                on:input=move |ev| date_acquired.set(event_target_value(&ev))
+                            />
+                        </div>
+                        <Show when=move || kind_id.get().is_some() fallback=|| ()>
                             {move || {
-                                let kinds = kinds_resource.get()
-                                    .and_then(|r| r.ok())
-                                    .unwrap_or_default();
-                                view! {
-                                    <select
-                                        class="edit-select"
-                                        prop:value=move || kind_id.get().map(|id| id.to_string()).unwrap_or_default()
-                                        on:change=move |ev| {
-                                            let val = event_target_value(&ev);
-                                            kind_id.set(Uuid::parse_str(&val).ok());
-                                        }
-                                    >
-                                        <option value="">"- Select Type -"</option>
-                                        {kinds.into_iter().map(|k| {
-                                            let val = k.id.to_string();
-                                            let label = k.display_name.unwrap_or_else(|| k.name.clone());
-                                            view! { <option value=val>{label}</option> }
-                                        }).collect_view()}
-                                    </select>
-                                }
-                            }}
-                        </Suspense>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">"Name:"</label>
-                        <input
-                            type="text"
-                            class="edit-input"
-                            prop:value=name
-                            on:input=move |ev| name.set(event_target_value(&ev))
-                        />
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">"Description:"</label>
-                        <input
-                            type="text"
-                            class="edit-input"
-                            prop:value=description
-                            on:input=move |ev| description.set(event_target_value(&ev))
-                        />
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">"Notes:"</label>
-                        <textarea
-                            class="edit-textarea"
-                            prop:value=notes
-                            on:input=move |ev| notes.set(event_target_value(&ev))
-                        />
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">"Location:"</label>
-                        <Suspense fallback=|| view! { <span>"Loading..."</span> }>
-                            {move || {
-                                let locs: Vec<Location> = locations_resource.get()
-                                    .and_then(|r| r.ok())
-                                    .unwrap_or_default();
-                                view! {
-                                    <select
-                                        class="edit-select"
-                                        prop:value=location_id
-                                        on:change=move |ev| location_id.set(event_target_value(&ev))
-                                    >
-                                        <option value="">"- None -"</option>
-                                        {locs.into_iter().map(|loc| {
-                                            let val = loc.id.to_string();
-                                            let lname = loc.name.clone();
-                                            view! { <option value=val>{lname}</option> }
-                                        }).collect_view()}
-                                    </select>
-                                }
-                            }}
-                        </Suspense>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">"Date Acquired:"</label>
-                        <input
-                            type="date"
-                            class="edit-input"
-                            prop:value=date_acquired
-                            on:input=move |ev| date_acquired.set(event_target_value(&ev))
-                        />
-                    </div>
-                    <Show when=move || kind_id.get().is_some() fallback=|| ()>
-                        {move || {
-                            match kind_fields_resource.get() {
-                                Some(Ok(fields)) if !fields.is_empty() => {
+                                let fields = kind_fields.get();
+                                if fields.is_empty() {
+                                    ().into_view()
+                                } else {
                                     render_kind_fields_section(&fields, soft_field_map)
                                 }
-                                _ => ().into_view(),
-                            }
-                        }}
-                    </Show>
-                    <Show when=move || error.get().is_some() fallback=|| ()>
-                        <div class="error">
-                            {move || error.get().unwrap_or_default()}
-                        </div>
-                    </Show>
-                    <div class="detail-actions">
+                            }}
+                        </Show>
+                        <Show when=move || error.get().is_some() fallback=|| ()>
+                            <div class="error">
+                                {move || error.get().unwrap_or_default()}
+                            </div>
+                        </Show>
+                    </div>
+                    <div class="modal-footer">
                         <button
-                            class="btn btn-ok"
+                            class="btn btn-secondary"
+                            prop:disabled=move || saving.get()
+                            on:click=move |_| close_and_reset()
+                        >
+                            "Cancel"
+                        </button>
+                        <button
+                            class="btn btn-primary"
+                            style="width:auto;"
                             prop:disabled=move || saving.get()
                             on:click=move |_| {
                                 if kind_id.get_untracked().is_none() {
@@ -263,13 +274,6 @@ pub fn CreateItemModal(
                         >
                             {move || if saving.get() { "Saving..." } else { "Save" }}
                         </button>
-                        <button
-                            class="btn btn-cancel"
-                            prop:disabled=move || saving.get()
-                            on:click=move |_| close_and_reset()
-                        >
-                            "Cancel"
-                        </button>
                     </div>
                 </div>
             </div>
@@ -285,8 +289,10 @@ fn render_kind_fields_section(
     sorted.sort_by_key(|f| f.display_order);
 
     view! {
-        <div class="detail-section">
-            <h4>"Details"</h4>
+        <div>
+            <div style="font-size:12px;font-weight:600;color:#777;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 8px;">
+                "Details"
+            </div>
             {sorted
                 .into_iter()
                 .map(|field_def| {
@@ -299,7 +305,7 @@ fn render_kind_fields_section(
                     let enum_values = field_def.enum_values.clone();
                     view! {
                         <div class="form-group">
-                            <label class="form-label">{label + ":"}</label>
+                            <label>{label}</label>
                             {render_soft_field_input(fname, ft, enum_values, soft_field_map)}
                         </div>
                     }
@@ -309,4 +315,3 @@ fn render_kind_fields_section(
     }
     .into_view()
 }
-

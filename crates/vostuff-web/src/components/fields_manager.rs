@@ -238,63 +238,89 @@ fn FieldRow(
 
 // ── Enum value editor ─────────────────────────────────────────────────────────
 
-/// (value, display_value) pairs
+/// (stable_key, value, display_value) triples.
+/// The stable_key is used by <For> so that existing DOM nodes are not
+/// recreated (and lose focus) when any row's content changes.
 #[component]
-fn EnumValueEditor(rows: RwSignal<Vec<(String, String)>>) -> impl IntoView {
+fn EnumValueEditor(rows: RwSignal<Vec<(u32, String, String)>>) -> impl IntoView {
+    // Start next_key above every key already in the list.
+    let next_key = create_rw_signal(
+        rows.get_untracked()
+            .iter()
+            .map(|(id, _, _)| *id)
+            .max()
+            .map(|m| m + 1)
+            .unwrap_or(0),
+    );
+
+    // When set to Some(key), the row with that key should focus its first input.
+    let focus_key: RwSignal<Option<u32>> = create_rw_signal(None);
+
     view! {
         <div>
-            {move || {
-                rows.get()
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, (val, dv))| {
-                        view! {
-                            <div class="enum-val-row">
-                                <input
-                                    type="text"
-                                    class="form-control"
-                                    placeholder="value"
-                                    prop:value=val.clone()
-                                    on:input=move |e| {
-                                        rows.update(|r| {
-                                            if let Some(row) = r.get_mut(i) {
-                                                row.0 = event_target_value(&e);
-                                            }
-                                        });
-                                    }
-                                />
-                                <input
-                                    type="text"
-                                    class="form-control"
-                                    placeholder="display value (optional)"
-                                    prop:value=dv.clone()
-                                    on:input=move |e| {
-                                        rows.update(|r| {
-                                            if let Some(row) = r.get_mut(i) {
-                                                row.1 = event_target_value(&e);
-                                            }
-                                        });
-                                    }
-                                />
-                                <button
-                                    class="btn btn-sm btn-danger"
-                                    on:click=move |_| {
-                                        rows.update(|r| {
-                                            r.remove(i);
-                                        });
-                                    }
-                                >
-                                    "Remove"
-                                </button>
-                            </div>
+            <For
+                each=move || rows.get()
+                key=|(id, _, _)| *id
+                children=move |(id, val, dv)| {
+                    let value_ref = create_node_ref::<html::Input>();
+
+                    create_effect(move |_| {
+                        if focus_key.get() == Some(id) {
+                            if let Some(el) = value_ref.get() {
+                                let _ = el.focus();
+                                focus_key.set(None);
+                            }
                         }
-                    })
-                    .collect_view()
-            }}
+                    });
+
+                    view! {
+                        <div class="enum-val-row">
+                            <input
+                                node_ref=value_ref
+                                type="text"
+                                class="form-control"
+                                placeholder="value"
+                                prop:value=val
+                                on:input=move |e| {
+                                    rows.update(|r| {
+                                        if let Some(row) = r.iter_mut().find(|(i, _, _)| *i == id) {
+                                            row.1 = event_target_value(&e);
+                                        }
+                                    });
+                                }
+                            />
+                            <input
+                                type="text"
+                                class="form-control"
+                                placeholder="display value (optional)"
+                                prop:value=dv
+                                on:input=move |e| {
+                                    rows.update(|r| {
+                                        if let Some(row) = r.iter_mut().find(|(i, _, _)| *i == id) {
+                                            row.2 = event_target_value(&e);
+                                        }
+                                    });
+                                }
+                            />
+                            <button
+                                class="btn btn-sm btn-danger"
+                                on:click=move |_| {
+                                    rows.update(|r| r.retain(|(i, _, _)| *i != id));
+                                }
+                            >
+                                "Remove"
+                            </button>
+                        </div>
+                    }
+                }
+            />
             <button
                 class="btn btn-secondary btn-sm"
                 on:click=move |_| {
-                    rows.update(|r| r.push((String::new(), String::new())));
+                    let key = next_key.get_untracked();
+                    next_key.update(|k| *k += 1);
+                    rows.update(|r| r.push((key, String::new(), String::new())));
+                    focus_key.set(Some(key));
                 }
             >
                 "+ Add Value"
@@ -314,7 +340,7 @@ fn CreateFieldModal(
     let name = create_rw_signal(String::new());
     let display_name = create_rw_signal(String::new());
     let field_type = create_rw_signal("string".to_string());
-    let enum_rows: RwSignal<Vec<(String, String)>> = create_rw_signal(Vec::new());
+    let enum_rows: RwSignal<Vec<(u32, String, String)>> = create_rw_signal(Vec::new());
     let saving = create_rw_signal(false);
     let error: RwSignal<Option<String>> = create_rw_signal(None);
 
@@ -328,7 +354,7 @@ fn CreateFieldModal(
                 let ev: Vec<serde_json::Value> = rows
                     .into_iter()
                     .enumerate()
-                    .map(|(i, (v, dv))| {
+                    .map(|(i, (_, v, dv))| {
                         serde_json::json!({
                             "value": v,
                             "display_value": if dv.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(dv) },
@@ -457,17 +483,13 @@ fn EditFieldModal(
     let is_enum = field.field_type == "enum";
     let display_name = create_rw_signal(field.display_name.clone().unwrap_or_default());
 
-    let initial_rows: Vec<(String, String)> = field
+    let initial_rows: Vec<(u32, String, String)> = field
         .enum_values
         .iter()
-        .map(|ev| {
-            (
-                ev.value.clone(),
-                ev.display_value.clone().unwrap_or_default(),
-            )
-        })
+        .enumerate()
+        .map(|(i, ev)| (i as u32, ev.value.clone(), ev.display_value.clone().unwrap_or_default()))
         .collect();
-    let enum_rows: RwSignal<Vec<(String, String)>> = create_rw_signal(initial_rows);
+    let enum_rows: RwSignal<Vec<(u32, String, String)>> = create_rw_signal(initial_rows);
 
     let saving = create_rw_signal(false);
     let error: RwSignal<Option<String>> = create_rw_signal(None);
@@ -481,7 +503,7 @@ fn EditFieldModal(
                 let ev: Vec<serde_json::Value> = rows
                     .into_iter()
                     .enumerate()
-                    .map(|(i, (v, dv))| {
+                    .map(|(i, (_, v, dv))| {
                         serde_json::json!({
                             "value": v,
                             "display_value": if dv.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(dv) },

@@ -109,7 +109,7 @@ pub fn render_soft_field_input(
             view! {
                 <input
                     type="number"
-                    class="edit-input"
+                    class="form-control"
                     prop:value=current_val
                     on:input=move |ev| {
                         let s = event_target_value(&ev);
@@ -135,7 +135,7 @@ pub fn render_soft_field_input(
             view! {
                 <input
                     type="date"
-                    class="edit-input"
+                    class="form-control"
                     prop:value=current_val
                     on:input=move |ev| {
                         soft_field_map.update(|m| {
@@ -151,7 +151,7 @@ pub fn render_soft_field_input(
             view! {
                 <input
                     type="datetime-local"
-                    class="edit-input"
+                    class="form-control"
                     prop:value=current_val
                     on:input=move |ev| {
                         soft_field_map.update(|m| {
@@ -166,7 +166,8 @@ pub fn render_soft_field_input(
             let n = name.clone();
             view! {
                 <textarea
-                    class="edit-textarea"
+                    class="form-control"
+                    style="min-height:80px;resize:vertical;"
                     prop:value=current_val
                     on:input=move |ev| {
                         soft_field_map.update(|m| {
@@ -181,7 +182,7 @@ pub fn render_soft_field_input(
             let n = name.clone();
             view! {
                 <select
-                    class="edit-select"
+                    class="form-control"
                     prop:value=current_val
                     on:change=move |ev| {
                         soft_field_map.update(|m| {
@@ -208,7 +209,7 @@ pub fn render_soft_field_input(
             view! {
                 <input
                     type="text"
-                    class="edit-input"
+                    class="form-control"
                     prop:value=current_val
                     on:input=move |ev| {
                         soft_field_map.update(|m| {
