@@ -507,6 +507,12 @@ body {
   display: flex;
   gap: 8px;
   margin-top: 12px;
+  align-items: center;
+}
+
+.delete-confirm-text {
+  font-size: 13px;
+  color: #555;
 }
 
 /* Pagination */

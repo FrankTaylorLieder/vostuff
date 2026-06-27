@@ -280,6 +280,50 @@ pub async fn update_item(
     Ok(())
 }
 
+/// Delete an item
+#[server(DeleteItem, "/api")]
+pub async fn delete_item(
+    org_id: Uuid,
+    item_id: Uuid,
+) -> Result<(), ServerFnError<NoCustomError>> {
+    let token = get_auth_token().await?;
+
+    let api_base_url =
+        std::env::var("API_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+
+    let url = format!(
+        "{}/api/organizations/{}/items/{}",
+        api_base_url, org_id, item_id
+    );
+
+    let client = reqwest::Client::new();
+    let response = client
+        .delete(&url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|e| {
+            ServerFnError::<NoCustomError>::ServerError(format!("API request failed: {}", e))
+        })?;
+
+    if response.status() == 401 {
+        return Err(ServerFnError::<NoCustomError>::ServerError(
+            "Not authenticated".to_string(),
+        ));
+    }
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(ServerFnError::<NoCustomError>::ServerError(format!(
+            "Failed to delete item: {} - {}",
+            status, body
+        )));
+    }
+
+    Ok(())
+}
+
 /// Filter parameters for items query
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]

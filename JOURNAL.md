@@ -1,5 +1,47 @@
 # VOStuff Project Journal
 
+## 2026-06-27 - Enable item delete in the web UI
+
+**Prompts:**
+
+1. Can you run the application so I can try it out
+2. How does a user delete an item?
+3. OK, can you check
+4. OK, can you propose a plan for implementing delete in the UI
+5. (plan approval)
+
+**Summary:**
+
+Ran the full stack for the user (PostgreSQL via Rancher/docker-compose, api-server on
+:8080, `cargo leptos watch` on :3001) after running migrations.
+
+Investigated item deletion and found the API already had a working
+`DELETE /api/organizations/{org_id}/items/{item_id}` endpoint
+(`items::delete_item`, hard delete, 204/404), but the web UI had no way to invoke it —
+no server fn, no UI control. This matched the open "Enable item delete" TODO.
+
+Implemented the UI side following the existing `delete_kind`/`delete_field` patterns:
+
+- **`server_fns/items.rs`**: Added `delete_item(org_id, item_id)` `#[server]` fn that
+  reuses `get_auth_token()`, sends a `DELETE` with the Bearer token, and maps 401/non-2xx
+  to errors.
+- **`components/items_table.rs`** (`ItemExpandedRow`): Added a `delete_action`
+  (`create_action`) + `create_effect` that calls the existing `on_item_updated` callback
+  on success (parent refreshes the list, deleted row disappears) and surfaces errors
+  inline. Added a **two-click inline confirm** UI in the `detail-actions` row: a red
+  Delete button that swaps to "Delete this item?" + "Yes, delete" / "Cancel" (chosen over
+  one-click and modal options after asking the user).
+- **`style/main.css`**: `align-items: center` on `.detail-actions` and a small
+  `.delete-confirm-text` style. No new button styles needed (`btn-danger`/`btn-sm` exist).
+
+Verified: `cargo check -p vostuff-web --features ssr` clean (only pre-existing warnings);
+leptos watch hot-reloaded SSR + WASM and restarted the server; end-to-end against a real
+org created an item (200), deleted it (204), confirmed gone (404) and idempotent re-delete
+(404). Note: org/role authz is still not enforced (separate open TODO) — the API currently
+accepts these calls without a valid token.
+
+---
+
 ## 2026-04-25 - Restyle item add/edit forms to match field modal UX
 
 **Prompts:**

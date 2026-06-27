@@ -8,7 +8,8 @@ use crate::components::soft_field_helpers::{
     format_field_name, format_soft_field_value, render_soft_field_input, value_to_edit_str,
 };
 use crate::server_fns::items::{
-    Item, ItemFullDetails, ItemState, Location, UpdateItemRequest, get_item_details, update_item,
+    Item, ItemFullDetails, ItemState, Location, UpdateItemRequest, delete_item, get_item_details,
+    update_item,
 };
 use crate::server_fns::kinds::{get_kind_fields, KindFieldDef};
 
@@ -403,6 +404,10 @@ fn ItemExpandedRow(
 
     let (save_error, set_save_error) = create_signal::<Option<String>>(None);
 
+    // Delete signals
+    let (confirming_delete, set_confirming_delete) = create_signal(false);
+    let (delete_error, set_delete_error) = create_signal::<Option<String>>(None);
+
     // Loan signals
     let (edit_loan_date_loaned, set_edit_loan_date_loaned) = create_signal(String::new());
     let (edit_loan_date_due_back, set_edit_loan_date_due_back) = create_signal(String::new());
@@ -593,6 +598,27 @@ fn ItemExpandedRow(
         }
     });
 
+    // Delete action
+    let delete_action = create_action(move |_: &()| async move { delete_item(org_id, item_id).await });
+
+    // React to delete action completion
+    create_effect(move |_| {
+        if let Some(result) = delete_action.value().get() {
+            match result {
+                Ok(()) => {
+                    // Row will disappear when the parent refreshes the list.
+                    on_item_updated.call(());
+                }
+                Err(e) => {
+                    let msg = format!("{}", e);
+                    leptos::logging::error!("Failed to delete item: {}", msg);
+                    set_delete_error.set(Some(msg));
+                    set_confirming_delete.set(false);
+                }
+            }
+        }
+    });
+
     let locations_for_edit = locations_list.clone();
     let item_state_for_view = item.state.clone();
     let kind_name_for_edit = item.kind_name.clone();
@@ -674,7 +700,46 @@ fn ItemExpandedRow(
                                         >
                                             "Edit"
                                         </button>
+                                        <Show
+                                            when=move || confirming_delete.get()
+                                            fallback=move || view! {
+                                                <button
+                                                    class="btn btn-danger btn-sm"
+                                                    on:click=move |_| {
+                                                        set_delete_error.set(None);
+                                                        set_confirming_delete.set(true);
+                                                    }
+                                                >
+                                                    "Delete"
+                                                </button>
+                                            }
+                                        >
+                                            <span class="delete-confirm-text">"Delete this item?"</span>
+                                            <button
+                                                class="btn btn-danger btn-sm"
+                                                disabled=move || delete_action.pending().get()
+                                                on:click=move |_| {
+                                                    delete_action.dispatch(());
+                                                }
+                                            >
+                                                "Yes, delete"
+                                            </button>
+                                            <button
+                                                class="btn btn-secondary btn-sm"
+                                                disabled=move || delete_action.pending().get()
+                                                on:click=move |_| {
+                                                    set_confirming_delete.set(false);
+                                                }
+                                            >
+                                                "Cancel"
+                                            </button>
+                                        </Show>
                                     </div>
+                                    <Show when=move || delete_error.get().is_some() fallback=|| ()>
+                                        <div class="error">
+                                            {move || delete_error.get().unwrap_or_default()}
+                                        </div>
+                                    </Show>
                                 }.into_view()
                             }
                         }

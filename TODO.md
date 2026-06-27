@@ -162,7 +162,7 @@ in use by items with a 409 and clear error message.
 
 1. Add location add/edit/remove value editing options. Inline with the dropdown.
 1. Add clear x button in search box
-1. Enable item delete
+1. ~~Enable item delete~~ ✓ DONE (2026-06-27) — `delete_item` server fn + two-click inline confirm in the expanded item row
 1. Improve "Add item" layout
 1. Discogs importer
 1. Import/export (generic CSV or JSON)
