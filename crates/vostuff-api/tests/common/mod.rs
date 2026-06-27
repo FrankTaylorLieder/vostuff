@@ -86,7 +86,7 @@ impl TestContext {
         for stmt in [
             "DELETE FROM user_organizations",
             "DELETE FROM users",
-            "DELETE FROM organizations WHERE id != '00000000-0000-0000-0000-000000000000'",
+            "DELETE FROM organizations WHERE id != 'ffffffff-ffff-ffff-ffff-ffffffffffff'",
         ] {
             sqlx::query(stmt)
                 .execute(pool)

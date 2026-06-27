@@ -163,7 +163,12 @@ pub async fn list_items(
 
     let items_query = format!(
         "{} WHERE {} ORDER BY {} {} LIMIT ${} OFFSET ${}",
-        ITEM_SELECT, where_clause, order_column, order_direction, param_idx, param_idx + 1
+        ITEM_SELECT,
+        where_clause,
+        order_column,
+        order_direction,
+        param_idx,
+        param_idx + 1
     );
 
     let mut items_builder = sqlx::query_as::<_, ItemRow>(&items_query).bind(org_id);
@@ -325,13 +330,15 @@ pub async fn update_item(
     Json(req): Json<UpdateItemRequest>,
 ) -> Result<Json<Item>, (StatusCode, Json<ErrorResponse>)> {
     // Fetch current item to get kind_id and state for validation
-    let current = sqlx::query("SELECT kind_id, state::text FROM items WHERE id = $1 AND organization_id = $2")
-        .bind(item_id)
-        .bind(org_id)
-        .fetch_optional(&state.pool)
-        .await
-        .map_err(internal_error)?
-        .ok_or_else(not_found)?;
+    let current = sqlx::query(
+        "SELECT kind_id, state::text FROM items WHERE id = $1 AND organization_id = $2",
+    )
+    .bind(item_id)
+    .bind(org_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(internal_error)?
+    .ok_or_else(not_found)?;
 
     let kind_id: Uuid = current.get("kind_id");
     let state_str: String = current.get("state");
@@ -389,13 +396,27 @@ pub async fn update_item(
         .bind(item_id)
         .bind(org_id);
 
-    if let Some(ref v) = req.name { qb = qb.bind(v); }
-    if let Some(ref v) = req.description { qb = qb.bind(v); }
-    if let Some(ref v) = req.notes { qb = qb.bind(v); }
-    if let Some(ref v) = req.location_id { qb = qb.bind(v); }
-    if let Some(ref v) = req.date_acquired { qb = qb.bind(v); }
-    if let Some(ref v) = req.state { qb = qb.bind(item_state_to_db(v)); }
-    if let Some(ref v) = req.soft_fields { qb = qb.bind(v); }
+    if let Some(ref v) = req.name {
+        qb = qb.bind(v);
+    }
+    if let Some(ref v) = req.description {
+        qb = qb.bind(v);
+    }
+    if let Some(ref v) = req.notes {
+        qb = qb.bind(v);
+    }
+    if let Some(ref v) = req.location_id {
+        qb = qb.bind(v);
+    }
+    if let Some(ref v) = req.date_acquired {
+        qb = qb.bind(v);
+    }
+    if let Some(ref v) = req.state {
+        qb = qb.bind(item_state_to_db(v));
+    }
+    if let Some(ref v) = req.soft_fields {
+        qb = qb.bind(v);
+    }
 
     let row = qb
         .fetch_optional(&state.pool)
@@ -510,10 +531,7 @@ pub async fn get_item_details(
     State(state): State<AppState>,
     Path((org_id, item_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<ItemFullDetails>, (StatusCode, Json<ErrorResponse>)> {
-    let query = format!(
-        "{} WHERE i.id = $1 AND i.organization_id = $2",
-        ITEM_SELECT
-    );
+    let query = format!("{} WHERE i.id = $1 AND i.organization_id = $2", ITEM_SELECT);
     let item_row = sqlx::query_as::<_, ItemRow>(&query)
         .bind(item_id)
         .bind(org_id)

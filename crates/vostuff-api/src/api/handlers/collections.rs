@@ -1,5 +1,5 @@
 use axum::{
-    Json,
+    Extension, Json,
     extract::{Path, State},
     http::StatusCode,
 };
@@ -9,6 +9,7 @@ use crate::api::{
     models::{Collection, CreateCollectionRequest, ErrorResponse},
     state::AppState,
 };
+use crate::auth::AuthContext;
 
 /// List all collections for an organization
 #[utoipa::path(
@@ -56,9 +57,15 @@ pub async fn list_collections(
 )]
 pub async fn create_collection(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(org_id): Path<Uuid>,
     Json(req): Json<CreateCollectionRequest>,
 ) -> Result<(StatusCode, Json<Collection>), (StatusCode, Json<ErrorResponse>)> {
+    if !auth.is_admin() {
+        return Err(forbidden(
+            "Administrator access required to manage collections",
+        ));
+    }
     let collection = sqlx::query_as::<_, Collection>(
         "INSERT INTO collections (organization_id, name, description, notes)
          VALUES ($1, $2, $3, $4)
@@ -92,8 +99,14 @@ pub async fn create_collection(
 )]
 pub async fn delete_collection(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path((org_id, collection_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    if !auth.is_admin() {
+        return Err(forbidden(
+            "Administrator access required to manage collections",
+        ));
+    }
     let result = sqlx::query("DELETE FROM collections WHERE id = $1 AND organization_id = $2")
         .bind(collection_id)
         .bind(org_id)
@@ -120,6 +133,16 @@ fn internal_error<E: std::fmt::Display>(err: E) -> (StatusCode, Json<ErrorRespon
         Json(ErrorResponse {
             error: "internal_error".to_string(),
             message: err.to_string(),
+        }),
+    )
+}
+
+fn forbidden(msg: &str) -> (StatusCode, Json<ErrorResponse>) {
+    (
+        StatusCode::FORBIDDEN,
+        Json(ErrorResponse {
+            error: "forbidden".to_string(),
+            message: msg.to_string(),
         }),
     )
 }

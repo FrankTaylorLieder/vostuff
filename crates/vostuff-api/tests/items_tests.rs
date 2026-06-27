@@ -94,7 +94,10 @@ async fn test_create_vinyl_with_soft_fields() {
     get_response.assert_success();
     assert_eq!(get_response.body["kind_name"], "vinyl");
     assert_eq!(get_response.body["soft_fields"]["size"], "12_inch");
-    assert_eq!(get_response.body["soft_fields"]["media_grading"], "near_mint");
+    assert_eq!(
+        get_response.body["soft_fields"]["media_grading"],
+        "near_mint"
+    );
 }
 
 #[tokio::test]

@@ -1,5 +1,5 @@
 use axum::{
-    Json,
+    Extension, Json,
     extract::{Path, State},
     http::StatusCode,
 };
@@ -9,6 +9,7 @@ use crate::api::{
     models::{CreateTagRequest, ErrorResponse, Tag},
     state::AppState,
 };
+use crate::auth::AuthContext;
 
 /// List all tags for an organization
 #[utoipa::path(
@@ -56,9 +57,13 @@ pub async fn list_tags(
 )]
 pub async fn create_tag(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(org_id): Path<Uuid>,
     Json(req): Json<CreateTagRequest>,
 ) -> Result<(StatusCode, Json<Tag>), (StatusCode, Json<ErrorResponse>)> {
+    if !auth.is_admin() {
+        return Err(forbidden("Administrator access required to manage tags"));
+    }
     let tag = sqlx::query_as::<_, Tag>(
         "INSERT INTO tags (organization_id, name) VALUES ($1, $2)
          RETURNING organization_id, name, created_at",
@@ -89,8 +94,12 @@ pub async fn create_tag(
 )]
 pub async fn delete_tag(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path((org_id, tag_name)): Path<(Uuid, String)>,
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    if !auth.is_admin() {
+        return Err(forbidden("Administrator access required to manage tags"));
+    }
     let result = sqlx::query("DELETE FROM tags WHERE organization_id = $1 AND name = $2")
         .bind(org_id)
         .bind(&tag_name)
@@ -109,6 +118,16 @@ pub async fn delete_tag(
     } else {
         Ok(StatusCode::NO_CONTENT)
     }
+}
+
+fn forbidden(msg: &str) -> (StatusCode, Json<ErrorResponse>) {
+    (
+        StatusCode::FORBIDDEN,
+        Json(ErrorResponse {
+            error: "forbidden".to_string(),
+            message: msg.to_string(),
+        }),
+    )
 }
 
 fn internal_error<E: std::fmt::Display>(err: E) -> (StatusCode, Json<ErrorResponse>) {

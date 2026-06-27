@@ -1,7 +1,7 @@
 # VOStuff TODO
 
 ## Existing backlog
-- Authz - actually restrict operations based on org/role
+- ~~Authz - actually restrict operations based on org/role~~ ✓ DONE (2026-06-27) — org-membership enforced on all `/organizations/:org_id/*` routes; ADMIN required for kinds/fields/locations/collections/tags management; `/admin/*` restricted to SYSTEM-org super-admins. SYSTEM org moved from all-zeros to all-ones.
 - Compose for running app in production
 - Maybe change auth to separate identity from access tokens. Changes the follow on flow... now we always verify identity. Then create authz tokens for the org we want to use.
 - OIDC authn
@@ -166,3 +166,5 @@ in use by items with a 409 and clear error message.
 1. Improve "Add item" layout
 1. Discogs importer
 1. Import/export (generic CSV or JSON)
+1. Improve error reporting the UI, e.g. authz errors.
+

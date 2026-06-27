@@ -174,7 +174,15 @@ async fn main() -> Result<()> {
 
     // Import items
     println!("\nImporting items...\n");
-    let stats = import_items(&client, &args.api_url, &token, org_id, dvd_kind_id, &records).await?;
+    let stats = import_items(
+        &client,
+        &args.api_url,
+        &token,
+        org_id,
+        dvd_kind_id,
+        &records,
+    )
+    .await?;
 
     // Print summary
     println!("\n=== Import Summary ===");

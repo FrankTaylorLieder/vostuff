@@ -1,5 +1,5 @@
 use axum::{
-    Json,
+    Extension, Json,
     extract::{Path, State},
     http::StatusCode,
 };
@@ -7,10 +7,8 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::api::{
-    models::ErrorResponse,
-    state::AppState,
-};
+use crate::api::{models::ErrorResponse, state::AppState};
+use crate::auth::AuthContext;
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -239,9 +237,13 @@ pub async fn get_field(
 )]
 pub async fn create_field(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(org_id): Path<Uuid>,
     Json(req): Json<CreateFieldRequest>,
 ) -> Result<(StatusCode, Json<Field>), (StatusCode, Json<ErrorResponse>)> {
+    if !auth.is_admin() {
+        return Err(forbidden("Administrator access required to manage fields"));
+    }
     // Check shared name conflict
     let shared_conflict: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM fields WHERE name = $1 AND org_id IS NULL)",
@@ -259,14 +261,13 @@ pub async fn create_field(
     }
 
     // Check org name conflict
-    let org_conflict: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM fields WHERE name = $1 AND org_id = $2)",
-    )
-    .bind(&req.name)
-    .bind(org_id)
-    .fetch_one(&state.pool)
-    .await
-    .map_err(internal_error)?;
+    let org_conflict: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM fields WHERE name = $1 AND org_id = $2)")
+            .bind(&req.name)
+            .bind(org_id)
+            .fetch_one(&state.pool)
+            .await
+            .map_err(internal_error)?;
 
     if org_conflict {
         return Err(conflict(
@@ -349,9 +350,13 @@ pub async fn create_field(
 )]
 pub async fn update_field(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path((org_id, field_id)): Path<(Uuid, Uuid)>,
     Json(req): Json<UpdateFieldRequest>,
 ) -> Result<Json<Field>, (StatusCode, Json<ErrorResponse>)> {
+    if !auth.is_admin() {
+        return Err(forbidden("Administrator access required to manage fields"));
+    }
     // Fetch the field and verify ownership
     let row = sqlx::query(
         "SELECT id, org_id, name, field_type::text AS field_type FROM fields WHERE id = $1",
@@ -377,14 +382,12 @@ pub async fn update_field(
     let mut tx = state.pool.begin().await.map_err(internal_error)?;
 
     if let Some(ref display_name) = req.display_name {
-        sqlx::query(
-            "UPDATE fields SET display_name = $1, updated_at = NOW() WHERE id = $2",
-        )
-        .bind(display_name)
-        .bind(field_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(internal_error)?;
+        sqlx::query("UPDATE fields SET display_name = $1, updated_at = NOW() WHERE id = $2")
+            .bind(display_name)
+            .bind(field_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(internal_error)?;
     }
 
     if let Some(ref new_values) = req.enum_values {
@@ -398,13 +401,12 @@ pub async fn update_field(
         }
 
         // Fetch current values
-        let current_values: Vec<String> = sqlx::query_scalar(
-            "SELECT value FROM enum_values WHERE field_id = $1",
-        )
-        .bind(field_id)
-        .fetch_all(&mut *tx)
-        .await
-        .map_err(internal_error)?;
+        let current_values: Vec<String> =
+            sqlx::query_scalar("SELECT value FROM enum_values WHERE field_id = $1")
+                .bind(field_id)
+                .fetch_all(&mut *tx)
+                .await
+                .map_err(internal_error)?;
 
         let new_value_set: std::collections::HashSet<&str> =
             new_values.iter().map(|v| v.value.as_str()).collect();
@@ -435,12 +437,7 @@ pub async fn update_field(
             .await
             .map_err(internal_error)?
             .into_iter()
-            .map(|r| {
-                (
-                    r.get::<String, _>("value"),
-                    r.get::<i64, _>("item_count"),
-                )
-            })
+            .map(|r| (r.get::<String, _>("value"), r.get::<i64, _>("item_count")))
             .collect();
 
             if !blocked.is_empty() {
@@ -517,8 +514,12 @@ pub async fn update_field(
 )]
 pub async fn delete_field(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path((org_id, field_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    if !auth.is_admin() {
+        return Err(forbidden("Administrator access required to manage fields"));
+    }
     use sqlx::Row;
 
     let row = sqlx::query("SELECT id, org_id FROM fields WHERE id = $1")
@@ -536,13 +537,12 @@ pub async fn delete_field(
         return Err(forbidden("Field does not belong to this organization"));
     }
 
-    let kind_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM kind_fields WHERE field_id = $1",
-    )
-    .bind(field_id)
-    .fetch_one(&state.pool)
-    .await
-    .map_err(internal_error)?;
+    let kind_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM kind_fields WHERE field_id = $1")
+            .bind(field_id)
+            .fetch_one(&state.pool)
+            .await
+            .map_err(internal_error)?;
 
     if kind_count > 0 {
         return Err(conflict(

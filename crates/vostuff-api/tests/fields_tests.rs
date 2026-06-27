@@ -2,7 +2,7 @@ mod common;
 
 use axum::http::StatusCode;
 use common::TestFixture;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 // Fixed UUIDs from seed migration
@@ -17,7 +17,7 @@ async fn create_field(f: &TestFixture, name: &str, field_type: &str) -> Uuid {
         .post(
             &format!("/api/organizations/{}/fields", f.org1_id),
             &json!({"name": name, "field_type": field_type}),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
     res.assert_status(StatusCode::CREATED);
@@ -36,7 +36,7 @@ async fn create_enum_field(f: &TestFixture, name: &str, values: &[&str]) -> Uuid
         .post(
             &format!("/api/organizations/{}/fields", f.org1_id),
             &json!({"name": name, "field_type": "enum", "enum_values": enum_values}),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
     res.assert_status(StatusCode::CREATED);
@@ -49,7 +49,7 @@ async fn create_kind_with_field(f: &TestFixture, kind_name: &str, field_id: Uuid
         .post(
             &format!("/api/organizations/{}/kinds", f.org1_id),
             &json!({"name": kind_name, "field_ids": [field_id]}),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
     res.assert_status(StatusCode::CREATED);
@@ -62,7 +62,7 @@ async fn create_item(f: &TestFixture, kind_id: Uuid, name: &str, soft_fields: Va
         .post(
             &format!("/api/organizations/{}/items", f.org1_id),
             &json!({"kind_id": kind_id, "name": name, "soft_fields": soft_fields}),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
     res.assert_success();
@@ -79,17 +79,23 @@ async fn test_list_fields_includes_shared() {
         .ctx
         .get(
             &format!("/api/organizations/{}/fields", f.org1_id),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
 
     res.assert_success();
     let fields = res.body.as_array().unwrap();
     // Seed migration inserts 7 shared fields
-    assert!(fields.len() >= 7, "expected at least 7 shared fields, got {}", fields.len());
+    assert!(
+        fields.len() >= 7,
+        "expected at least 7 shared fields, got {}",
+        fields.len()
+    );
 
     // Verify at least one shared field is present with is_shared=true
-    let any_shared = fields.iter().any(|f| f["is_shared"].as_bool() == Some(true));
+    let any_shared = fields
+        .iter()
+        .any(|f| f["is_shared"].as_bool() == Some(true));
     assert!(any_shared, "expected at least one shared field");
 }
 
@@ -102,7 +108,7 @@ async fn test_get_shared_field_with_enum_values() {
         .ctx
         .get(
             &format!("/api/organizations/{}/fields/{}", f.org1_id, size_id),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
 
@@ -123,12 +129,8 @@ async fn test_get_field_not_found() {
     let res = f
         .ctx
         .get(
-            &format!(
-                "/api/organizations/{}/fields/{}",
-                f.org1_id,
-                Uuid::new_v4()
-            ),
-            Some(&f.user1_token),
+            &format!("/api/organizations/{}/fields/{}", f.org1_id, Uuid::new_v4()),
+            Some(&f.user2_token),
         )
         .await;
 
@@ -144,7 +146,7 @@ async fn test_create_string_field() {
         .post(
             &format!("/api/organizations/{}/fields", f.org1_id),
             &json!({"name": "edition", "display_name": "Edition", "field_type": "string"}),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
 
@@ -175,7 +177,7 @@ async fn test_create_enum_field_with_values() {
                     {"value": "fair", "display_value": "Fair", "sort_order": 3}
                 ]
             }),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
 
@@ -197,7 +199,7 @@ async fn test_create_field_conflicts_with_shared_name() {
         .post(
             &format!("/api/organizations/{}/fields", f.org1_id),
             &json!({"name": "size", "field_type": "string"}),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
 
@@ -218,7 +220,7 @@ async fn test_create_field_conflicts_within_org() {
         .post(
             &format!("/api/organizations/{}/fields", f.org1_id),
             &json!({"name": "rating", "field_type": "string"}),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
 
@@ -239,7 +241,7 @@ async fn test_create_non_enum_field_with_enum_values_is_rejected() {
                 "field_type": "text",
                 "enum_values": [{"value": "x", "sort_order": 1}]
             }),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
 
@@ -257,7 +259,7 @@ async fn test_update_field_display_name() {
         .patch(
             &format!("/api/organizations/{}/fields/{}", f.org1_id, field_id),
             &json!({"display_name": "Publication Year"}),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
 
@@ -283,7 +285,7 @@ async fn test_update_enum_field_replace_values() {
                     {"value": "stream", "sort_order": 3}
                 ]
             }),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
 
@@ -313,7 +315,7 @@ async fn test_update_enum_field_remove_value_in_use_is_blocked() {
                     {"value": "used", "sort_order": 1}
                 ]
             }),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
 
@@ -334,7 +336,7 @@ async fn test_update_shared_field_forbidden() {
         .patch(
             &format!("/api/organizations/{}/fields/{}", f.org1_id, size_id),
             &json!({"display_name": "New Label"}),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
 
@@ -353,7 +355,7 @@ async fn test_update_non_enum_field_with_enum_values_is_rejected() {
             &json!({
                 "enum_values": [{"value": "x", "sort_order": 1}]
             }),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
 
@@ -370,7 +372,7 @@ async fn test_delete_field() {
         .ctx
         .delete(
             &format!("/api/organizations/{}/fields/{}", f.org1_id, field_id),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
     del.assert_status(StatusCode::NO_CONTENT);
@@ -380,7 +382,7 @@ async fn test_delete_field() {
         .ctx
         .get(
             &format!("/api/organizations/{}/fields/{}", f.org1_id, field_id),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
     get.assert_status(StatusCode::NOT_FOUND);
@@ -396,7 +398,7 @@ async fn test_delete_field_in_use_by_kind_is_blocked() {
         .ctx
         .delete(
             &format!("/api/organizations/{}/fields/{}", f.org1_id, field_id),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
 
@@ -413,7 +415,7 @@ async fn test_delete_shared_field_forbidden() {
         .ctx
         .delete(
             &format!("/api/organizations/{}/fields/{}", f.org1_id, disks_id),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
 
@@ -429,7 +431,7 @@ async fn test_list_fields_shows_org_fields() {
         .ctx
         .get(
             &format!("/api/organizations/{}/fields", f.org1_id),
-            Some(&f.user1_token),
+            Some(&f.user2_token),
         )
         .await;
 

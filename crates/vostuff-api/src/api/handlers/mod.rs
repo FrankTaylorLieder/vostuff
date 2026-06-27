@@ -8,18 +8,27 @@ pub mod organizations;
 pub mod tags;
 pub mod users;
 
-use crate::api::{middleware::auth_middleware, state::AppState};
+use crate::api::{
+    middleware::{
+        auth_middleware, org_access_middleware, require_auth_middleware, system_admin_middleware,
+    },
+    state::AppState,
+};
 use axum::{
     Router, middleware,
     routing::{delete, get, patch, post},
 };
 
-
 /// Build the API router with all routes configured
 /// This is used by both the main application and integration tests
 /// Note: Routes don't include /api prefix - that's added by nesting in main app
+///
+/// Routes are grouped by the authorization they require, with each group's gate applied
+/// via `route_layer`. The global `auth_middleware` (outermost `.layer`) runs first and
+/// populates the `AuthContext` that the gates then read.
 pub fn build_router(state: AppState) -> Router {
-    Router::new()
+    // Org-scoped routes: require authentication and membership of the path org.
+    let org_routes = Router::new()
         // Items
         .route("/organizations/:org_id/items", get(items::list_items))
         .route("/organizations/:org_id/items", post(items::create_item))
@@ -114,6 +123,10 @@ pub fn build_router(state: AppState) -> Router {
             "/organizations/:org_id/tags/:tag_name",
             delete(tags::delete_tag),
         )
+        .route_layer(middleware::from_fn(org_access_middleware));
+
+    // System administration routes: require a SYSTEM-org super-admin.
+    let system_routes = Router::new()
         // Admin - Organizations
         .route(
             "/admin/organizations",
@@ -162,12 +175,24 @@ pub fn build_router(state: AppState) -> Router {
             "/admin/users/:user_id/organizations/:org_id",
             delete(users::remove_user_from_organization),
         )
-        // Authentication (public endpoints)
-        .route("/auth/login", post(auth::login))
-        .route("/auth/select-org", post(auth::select_org))
-        // Authentication (authenticated endpoints)
+        .route_layer(middleware::from_fn(system_admin_middleware));
+
+    // Authenticated (but not org/role gated) routes.
+    let authed_routes = Router::new()
         .route("/auth/me", get(auth::get_me))
+        .route_layer(middleware::from_fn(require_auth_middleware));
+
+    // Public routes: no authentication required.
+    let public_routes = Router::new()
+        .route("/auth/login", post(auth::login))
+        .route("/auth/select-org", post(auth::select_org));
+
+    Router::new()
+        .merge(org_routes)
+        .merge(system_routes)
+        .merge(authed_routes)
+        .merge(public_routes)
         .with_state(state.clone())
-        // Add auth middleware to extract tokens from headers
+        // Add auth middleware to extract tokens from headers (runs before the gates above)
         .layer(middleware::from_fn_with_state(state, auth_middleware))
 }

@@ -10,6 +10,13 @@ use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, deco
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// The SYSTEM organization id (all-ones, ffffffff-ffff-ffff-ffff-ffffffffffff).
+///
+/// Deliberately distinct from `Uuid::nil()` (all-zeros), which is reserved as the
+/// "no organization" sentinel used by an unauthenticated `AuthContext`. A user holding
+/// the `ADMIN` role with this org selected is treated as a system-wide super-admin.
+pub const SYSTEM_ORG_ID: Uuid = Uuid::from_bytes([0xFF; 16]);
+
 /// Password hashing utilities using Argon2
 pub struct PasswordHasher;
 
@@ -192,6 +199,12 @@ impl AuthContext {
     /// Check if user is admin
     pub fn is_admin(&self) -> bool {
         self.has_role("ADMIN")
+    }
+
+    /// Check if user is a system-wide super-admin: authenticated, currently operating
+    /// with the SYSTEM org selected, and holding the ADMIN role there.
+    pub fn is_system_admin(&self) -> bool {
+        self.is_authenticated && self.organization_id == SYSTEM_ORG_ID && self.has_role("ADMIN")
     }
 }
 

@@ -1,10 +1,13 @@
+use std::collections::HashMap;
+
 use axum::{
     Json,
-    extract::{Request, State},
+    extract::{Path, Request, State},
     http::{HeaderMap, StatusCode, header},
     middleware::Next,
     response::Response,
 };
+use uuid::Uuid;
 
 use crate::{
     api::{models::ErrorResponse, state::AppState},
@@ -93,13 +96,35 @@ pub async fn require_auth_middleware(
     Ok(next.run(request).await)
 }
 
-/// Middleware that requires admin access - returns 403 if not admin
-/// For now, we consider all authenticated users as admin since there's no role system yet
-pub async fn require_admin_middleware(
+/// Helpers for building error responses
+fn unauthorized() -> (StatusCode, Json<ErrorResponse>) {
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(ErrorResponse {
+            error: "unauthorized".to_string(),
+            message: "Authentication required".to_string(),
+        }),
+    )
+}
+
+fn forbidden(message: &str) -> (StatusCode, Json<ErrorResponse>) {
+    (
+        StatusCode::FORBIDDEN,
+        Json(ErrorResponse {
+            error: "forbidden".to_string(),
+            message: message.to_string(),
+        }),
+    )
+}
+
+/// Middleware for org-scoped routes (`/organizations/:org_id/*`). Requires the caller to
+/// be authenticated and to have selected the same org as the one in the path. Returns 401
+/// if unauthenticated, 403 if authenticated but not a member of the path org.
+pub async fn org_access_middleware(
+    Path(params): Path<HashMap<String, String>>,
     request: Request,
     next: Next,
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
-    // Check if user is authenticated
     let auth_context = request
         .extensions()
         .get::<AuthContext>()
@@ -107,17 +132,40 @@ pub async fn require_admin_middleware(
         .unwrap_or_else(AuthContext::unauthenticated);
 
     if !auth_context.is_authenticated() {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "unauthorized".to_string(),
-                message: "Authentication required".to_string(),
-            }),
-        ));
+        return Err(unauthorized());
     }
 
-    // For now, all authenticated users have admin access
-    // In the future, we could check roles/permissions here
+    let org_id = params
+        .get("org_id")
+        .and_then(|s| Uuid::parse_str(s).ok())
+        .ok_or_else(|| forbidden("Invalid organization id"))?;
+
+    if !auth_context.has_org_access(org_id) {
+        return Err(forbidden("You do not have access to this organization"));
+    }
+
+    Ok(next.run(request).await)
+}
+
+/// Middleware for system administration routes (`/admin/*`). Requires the caller to be a
+/// system super-admin: authenticated with the SYSTEM org selected and holding ADMIN there.
+pub async fn system_admin_middleware(
+    request: Request,
+    next: Next,
+) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+    let auth_context = request
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_else(AuthContext::unauthenticated);
+
+    if !auth_context.is_authenticated() {
+        return Err(unauthorized());
+    }
+
+    if !auth_context.is_system_admin() {
+        return Err(forbidden("System administrator access required"));
+    }
 
     Ok(next.run(request).await)
 }

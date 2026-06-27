@@ -1,5 +1,5 @@
 use axum::{
-    Json,
+    Extension, Json,
     extract::{Path, State},
     http::StatusCode,
 };
@@ -9,6 +9,7 @@ use crate::api::{
     models::{CreateLocationRequest, ErrorResponse, Location},
     state::AppState,
 };
+use crate::auth::AuthContext;
 
 /// List all locations for an organization
 #[utoipa::path(
@@ -56,9 +57,15 @@ pub async fn list_locations(
 )]
 pub async fn create_location(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(org_id): Path<Uuid>,
     Json(req): Json<CreateLocationRequest>,
 ) -> Result<(StatusCode, Json<Location>), (StatusCode, Json<ErrorResponse>)> {
+    if !auth.is_admin() {
+        return Err(forbidden(
+            "Administrator access required to manage locations",
+        ));
+    }
     let location = sqlx::query_as::<_, Location>(
         "INSERT INTO locations (organization_id, name) VALUES ($1, $2)
          RETURNING id, organization_id, name, created_at, updated_at",
@@ -89,8 +96,14 @@ pub async fn create_location(
 )]
 pub async fn delete_location(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path((org_id, location_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    if !auth.is_admin() {
+        return Err(forbidden(
+            "Administrator access required to manage locations",
+        ));
+    }
     let result = sqlx::query("DELETE FROM locations WHERE id = $1 AND organization_id = $2")
         .bind(location_id)
         .bind(org_id)
@@ -117,6 +130,16 @@ fn internal_error<E: std::fmt::Display>(err: E) -> (StatusCode, Json<ErrorRespon
         Json(ErrorResponse {
             error: "internal_error".to_string(),
             message: err.to_string(),
+        }),
+    )
+}
+
+fn forbidden(msg: &str) -> (StatusCode, Json<ErrorResponse>) {
+    (
+        StatusCode::FORBIDDEN,
+        Json(ErrorResponse {
+            error: "forbidden".to_string(),
+            message: msg.to_string(),
         }),
     )
 }

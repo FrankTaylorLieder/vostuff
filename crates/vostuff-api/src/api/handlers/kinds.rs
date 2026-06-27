@@ -1,5 +1,5 @@
 use axum::{
-    Json,
+    Extension, Json,
     extract::{Path, Query, State},
     http::StatusCode,
 };
@@ -8,10 +8,8 @@ use sqlx::Row;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::api::{
-    models::ErrorResponse,
-    state::AppState,
-};
+use crate::api::{models::ErrorResponse, state::AppState};
+use crate::auth::AuthContext;
 
 pub use super::fields::{EnumValue, FieldType};
 
@@ -262,17 +260,20 @@ pub async fn get_kind(
 )]
 pub async fn create_kind(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(org_id): Path<Uuid>,
     Json(req): Json<CreateKindRequest>,
 ) -> Result<(StatusCode, Json<Kind>), (StatusCode, Json<ErrorResponse>)> {
+    if !auth.is_admin() {
+        return Err(forbidden("Administrator access required to manage kinds"));
+    }
     // Check name is not taken by a shared kind
-    let shared_conflict: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM kinds WHERE name = $1 AND org_id IS NULL)",
-    )
-    .bind(&req.name)
-    .fetch_one(&state.pool)
-    .await
-    .map_err(internal_error)?;
+    let shared_conflict: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM kinds WHERE name = $1 AND org_id IS NULL)")
+            .bind(&req.name)
+            .fetch_one(&state.pool)
+            .await
+            .map_err(internal_error)?;
 
     if shared_conflict {
         return Err(conflict(
@@ -282,14 +283,13 @@ pub async fn create_kind(
     }
 
     // Check name is not taken by an org kind
-    let org_conflict: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM kinds WHERE name = $1 AND org_id = $2)",
-    )
-    .bind(&req.name)
-    .bind(org_id)
-    .fetch_one(&state.pool)
-    .await
-    .map_err(internal_error)?;
+    let org_conflict: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM kinds WHERE name = $1 AND org_id = $2)")
+            .bind(&req.name)
+            .bind(org_id)
+            .fetch_one(&state.pool)
+            .await
+            .map_err(internal_error)?;
 
     if org_conflict {
         return Err(conflict(
@@ -377,10 +377,14 @@ pub async fn create_kind(
 )]
 pub async fn update_kind(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path((org_id, kind_id)): Path<(Uuid, Uuid)>,
     Query(q): Query<UpdateKindQuery>,
     Json(req): Json<UpdateKindRequest>,
 ) -> Result<Json<Kind>, (StatusCode, Json<ErrorResponse>)> {
+    if !auth.is_admin() {
+        return Err(forbidden("Administrator access required to manage kinds"));
+    }
     // Fetch the kind and verify it belongs to this org
     let row = sqlx::query("SELECT id, org_id FROM kinds WHERE id = $1")
         .bind(kind_id)
@@ -400,14 +404,12 @@ pub async fn update_kind(
     let mut tx = state.pool.begin().await.map_err(internal_error)?;
 
     if let Some(ref display_name) = req.display_name {
-        sqlx::query(
-            "UPDATE kinds SET display_name = $1, updated_at = NOW() WHERE id = $2",
-        )
-        .bind(display_name)
-        .bind(kind_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(internal_error)?;
+        sqlx::query("UPDATE kinds SET display_name = $1, updated_at = NOW() WHERE id = $2")
+            .bind(display_name)
+            .bind(kind_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(internal_error)?;
     }
 
     if let Some(ref new_field_ids) = req.field_ids {
@@ -535,8 +537,12 @@ pub async fn update_kind(
 )]
 pub async fn delete_kind(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path((org_id, kind_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    if !auth.is_admin() {
+        return Err(forbidden("Administrator access required to manage kinds"));
+    }
     let row = sqlx::query("SELECT id, org_id FROM kinds WHERE id = $1")
         .bind(kind_id)
         .fetch_optional(&state.pool)
@@ -552,13 +558,11 @@ pub async fn delete_kind(
         return Err(forbidden("Kind does not belong to this organization"));
     }
 
-    let item_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM items WHERE kind_id = $1",
-    )
-    .bind(kind_id)
-    .fetch_one(&state.pool)
-    .await
-    .map_err(internal_error)?;
+    let item_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM items WHERE kind_id = $1")
+        .bind(kind_id)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(internal_error)?;
 
     if item_count > 0 {
         return Err(conflict(
@@ -595,30 +599,32 @@ pub async fn delete_kind(
 )]
 pub async fn override_kind(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path((org_id, kind_id)): Path<(Uuid, Uuid)>,
 ) -> Result<(StatusCode, Json<Kind>), (StatusCode, Json<ErrorResponse>)> {
+    if !auth.is_admin() {
+        return Err(forbidden("Administrator access required to manage kinds"));
+    }
     // Fetch and verify it is a shared kind
-    let shared_row = sqlx::query(
-        "SELECT id, name, display_name FROM kinds WHERE id = $1 AND org_id IS NULL",
-    )
-    .bind(kind_id)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(internal_error)?
-    .ok_or_else(|| bad_request("not_shared", "The specified kind is not a shared kind"))?;
+    let shared_row =
+        sqlx::query("SELECT id, name, display_name FROM kinds WHERE id = $1 AND org_id IS NULL")
+            .bind(kind_id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(internal_error)?
+            .ok_or_else(|| bad_request("not_shared", "The specified kind is not a shared kind"))?;
 
     let shared_name: String = shared_row.get("name");
     let shared_display_name: Option<String> = shared_row.get("display_name");
 
     // Check if org already has a kind with this name
-    let already_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM kinds WHERE name = $1 AND org_id = $2)",
-    )
-    .bind(&shared_name)
-    .bind(org_id)
-    .fetch_one(&state.pool)
-    .await
-    .map_err(internal_error)?;
+    let already_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM kinds WHERE name = $1 AND org_id = $2)")
+            .bind(&shared_name)
+            .bind(org_id)
+            .fetch_one(&state.pool)
+            .await
+            .map_err(internal_error)?;
 
     if already_exists {
         return Err(conflict(
@@ -681,8 +687,12 @@ pub async fn override_kind(
 )]
 pub async fn revert_kind(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path((org_id, kind_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<RevertResponse>, (StatusCode, Json<ErrorResponse>)> {
+    if !auth.is_admin() {
+        return Err(forbidden("Administrator access required to manage kinds"));
+    }
     // Fetch org kind
     let org_row = sqlx::query("SELECT id, org_id, name FROM kinds WHERE id = $1")
         .bind(kind_id)
@@ -702,22 +712,21 @@ pub async fn revert_kind(
     }
 
     // Find the matching shared kind
-    let shared_id: Uuid = sqlx::query_scalar(
-        "SELECT id FROM kinds WHERE name = $1 AND org_id IS NULL",
-    )
-    .bind(&kind_name)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(internal_error)?
-    .ok_or_else(|| {
-        (
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                error: "no_shared_kind".to_string(),
-                message: "No shared kind found with this name to revert to".to_string(),
-            }),
-        )
-    })?;
+    let shared_id: Uuid =
+        sqlx::query_scalar("SELECT id FROM kinds WHERE name = $1 AND org_id IS NULL")
+            .bind(&kind_name)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(internal_error)?
+            .ok_or_else(|| {
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: "no_shared_kind".to_string(),
+                        message: "No shared kind found with this name to revert to".to_string(),
+                    }),
+                )
+            })?;
 
     // Determine orphaned fields: in org kind but not in shared kind
     let orphaned_field_names: Vec<String> = sqlx::query(
@@ -742,15 +751,13 @@ pub async fn revert_kind(
 
     let mut tx = state.pool.begin().await.map_err(internal_error)?;
 
-    let items_reassigned = sqlx::query(
-        "UPDATE items SET kind_id = $1 WHERE kind_id = $2",
-    )
-    .bind(shared_id)
-    .bind(kind_id)
-    .execute(&mut *tx)
-    .await
-    .map_err(internal_error)?
-    .rows_affected() as i64;
+    let items_reassigned = sqlx::query("UPDATE items SET kind_id = $1 WHERE kind_id = $2")
+        .bind(shared_id)
+        .bind(kind_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(internal_error)?
+        .rows_affected() as i64;
 
     sqlx::query("DELETE FROM kinds WHERE id = $1")
         .bind(kind_id)

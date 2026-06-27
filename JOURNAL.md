@@ -1,5 +1,51 @@
 # VOStuff Project Journal
 
+## 2026-06-27 - Implement org/role authorization (authz)
+
+**Prompts:**
+
+1. Can you plan out the missing authz feature.
+2. (clarification) I thought we had a system org, whose admin users should be able to add /admin/* APIs?
+3. I don't like that the system org is UUid::nil(). Can we change the SYSTEM to be all ones - i.e. a value which cannot be confused with no value.
+4. (plan approval)
+
+**Summary:**
+
+Enforced authorization across the API, which previously had full authentication
+machinery (`AuthContext` with org + roles in the JWT) but never checked it — any request,
+including unauthenticated ones, could read/write any org's data and the `/admin/*`
+endpoints were wide open.
+
+- **SYSTEM org relocated** from `00000000-…-000000000000` (= `Uuid::nil()`, colliding with
+  the unauthenticated "no org" value) to `ffffffff-…-ffffffff`. New migration
+  `20260627000000_system_org_all_ones.sql` (insert-new → repoint all org-referencing
+  tables → delete-old, since FKs cascade on delete but not update).
+- **Core** (`vostuff-core/src/auth.rs`): added `SYSTEM_ORG_ID` const (`Uuid::from_bytes([0xFF;16])`)
+  and `AuthContext::is_system_admin()` (authenticated + SYSTEM org selected + ADMIN role).
+- **Middleware** (`vostuff-api/src/api/middleware.rs`): added `org_access_middleware`
+  (extracts path `org_id`, requires auth + `has_org_access`; 401/403) and
+  `system_admin_middleware` (requires `is_system_admin`; 401/403); removed the stale
+  `require_admin_middleware`.
+- **Router** (`handlers/mod.rs`): split into public / authed (`/auth/me`) /
+  org-scoped / system-admin (`/admin/*`) groups, each gated via `route_layer`; the global
+  `auth_middleware` remains the outermost layer so `AuthContext` is set first.
+- **Handlers**: added `is_admin` guards (403 for non-admins) to the org-admin write ops in
+  kinds, fields, locations, collections, tags; reads and item CRUD stay open to any member.
+  Added a shared `forbidden()` helper where missing.
+- **Web**: audited all server fns — every authenticated API call already sends the Bearer
+  token, so no changes were needed.
+- **Tests**: updated `common/mod.rs` SYSTEM id; switched the functional kinds/fields tests
+  and the locations/collections/tags setup in multi_tenancy to the ADMIN token (those ops
+  are now admin-gated); added `authz_tests.rs` (9 cases: unauth 401, cross-org 403,
+  member read/CRUD, member-denied admin ops, admin-allowed ops, /admin/* gating).
+
+Verified: full `vostuff-api` test suite green (authz 9, multi-tenancy 7, items 9, kinds 17,
+fields 8, auth 20, lib 3); `cargo fmt` + `cargo clippy` clean. Note: running the
+integration suite wipes the dev database (existing `clean_database` behaviour), so the
+previously imported sample data was cleared.
+
+---
+
 ## 2026-06-27 - Enable item delete in the web UI
 
 **Prompts:**

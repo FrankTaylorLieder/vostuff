@@ -78,7 +78,7 @@ async fn test_user_cannot_access_other_org_locations() {
         .post(
             &format!("/api/organizations/{}/locations", fixture.org1_id),
             &json!({"name": "Private Location"}),
-            Some(&fixture.user1_token),
+            Some(&fixture.user2_token),
         )
         .await
         .assert_success();
@@ -108,7 +108,7 @@ async fn test_user_cannot_access_other_org_collections() {
         .post(
             &format!("/api/organizations/{}/collections", fixture.org1_id),
             &json!({"name": "Private Collection", "description": "Org1 only"}),
-            Some(&fixture.user1_token),
+            Some(&fixture.user2_token),
         )
         .await
         .assert_success();
@@ -138,7 +138,7 @@ async fn test_user_cannot_access_other_org_tags() {
         .post(
             &format!("/api/organizations/{}/tags", fixture.org1_id),
             &json!({"name": "secret-tag"}),
-            Some(&fixture.user1_token),
+            Some(&fixture.user2_token),
         )
         .await
         .assert_success();
