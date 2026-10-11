@@ -180,6 +180,14 @@ pub fn render_soft_field_input(
         }
         "enum" => {
             let n = name.clone();
+            // Stored so the closure below is `Copy` and can be reused per option
+            let n_sel = store_value(name.clone());
+            // The current value as a string, readable from each option's `selected`
+            let selected_val = move || {
+                n_sel.with_value(|n| {
+                    soft_field_map.with(|m| m.get(n).map(value_to_edit_str).unwrap_or_default())
+                })
+            };
             view! {
                 <select
                     class="form-control"
@@ -190,13 +198,20 @@ pub fn render_soft_field_input(
                         });
                     }
                 >
-                    <option value="">"- Select -"</option>
+                    <option value="" selected=move || selected_val().is_empty()>
+                        "- Select -"
+                    </option>
                     {enum_values
                         .iter()
                         .map(|e| {
                             let val = e.value.clone();
+                            let sel_val = val.clone();
                             let label = e.display_value.clone().unwrap_or_else(|| val.clone());
-                            view! { <option value=val>{label}</option> }
+                            view! {
+                                <option value=val selected=move || selected_val() == sel_val>
+                                    {label}
+                                </option>
+                            }
                         })
                         .collect_view()}
                 </select>

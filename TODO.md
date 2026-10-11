@@ -167,4 +167,5 @@ in use by items with a 409 and clear error message.
 1. Discogs importer
 1. Import/export (generic CSV or JSON)
 1. Improve error reporting the UI, e.g. authz errors.
-
+1. ~~Edit item: does not set the current location in the dropdown, instead shows -None-.~~ ✓ DONE (2026-10-11) — `<option>` elements in the edit form now carry a reactive `selected` attribute (the `prop:value` on `<select>` alone does not take effect for client-rendered options); same fix applied to enum soft-field selects
+1. ~~Main summary list not showing the Display name of the Type.~~ ✓ DONE (2026-10-11) — home page builds a `kind_id` → display-name map from the kinds API and passes it to `ItemsTable` as the `kind_names` prop (mirrors the existing `locations` map); the Type column and the expanded row's Type field use it, falling back to the kind's internal name

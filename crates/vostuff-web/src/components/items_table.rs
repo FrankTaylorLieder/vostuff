@@ -50,6 +50,9 @@ fn highlight_match(text: &str, query: &str) -> View {
 pub fn ItemsTable(
     items: Vec<Item>,
     locations: HashMap<Uuid, String>,
+    /// kind_id -> display name, so the Type column shows the kind's display name
+    #[prop(default = HashMap::new())]
+    kind_names: HashMap<Uuid, String>,
     #[prop(default = vec![])] locations_list: Vec<Location>,
     #[prop(default = String::new())] search_query: String,
     #[prop(default = "name".to_string())] sort_by: String,
@@ -139,6 +142,10 @@ pub fn ItemsTable(
                             .location_id
                             .and_then(|loc_id| locations.get(&loc_id).cloned())
                             .unwrap_or_else(|| "-".to_string());
+                        let kind_label = kind_names
+                            .get(&item.kind_id)
+                            .cloned()
+                            .unwrap_or_else(|| item.kind_name.clone());
                         let is_expanded = move || expanded_row.get() == Some(item_id);
                         let item_for_details = item.clone();
                         let sq = search_query.clone();
@@ -149,7 +156,7 @@ pub fn ItemsTable(
                                 class:expanded=is_expanded
                                 on:click=move |_| toggle_row(item_id)
                             >
-                                <td class="col-type">{item.kind_name.clone()}</td>
+                                <td class="col-type">{kind_label.clone()}</td>
                                 <td class="col-name">{highlight_match(&item.name, &sq)}</td>
                                 <td class="col-state">
                                     <span class=format!("state-badge {}", item.state.css_class())>
@@ -162,6 +169,7 @@ pub fn ItemsTable(
                                 <ItemExpandedRow
                                     item=item_for_details.clone()
                                     location_name=location_name.clone()
+                                    kind_label=kind_label.clone()
                                     search_query=sq2.clone()
                                     org_id=org_id
                                     locations_list=locations_list.get_value()
@@ -347,6 +355,9 @@ fn render_state_details(details: &ItemFullDetails) -> View {
 fn ItemExpandedRow(
     item: Item,
     location_name: String,
+    /// The kind's display name; falls back to the kind's internal name when empty
+    #[prop(default = String::new())]
+    kind_label: String,
     #[prop(default = String::new())] search_query: String,
     org_id: Uuid,
     #[prop(default = vec![])] locations_list: Vec<Location>,
@@ -621,7 +632,11 @@ fn ItemExpandedRow(
 
     let locations_for_edit = locations_list.clone();
     let item_state_for_view = item.state.clone();
-    let kind_name_for_edit = item.kind_name.clone();
+    let kind_name_for_edit = if kind_label.is_empty() {
+        item.kind_name.clone()
+    } else {
+        kind_label.clone()
+    };
 
     view! {
         <tr class="item-expanded" on:click=|e| e.stop_propagation()>
@@ -786,13 +801,26 @@ fn ItemExpandedRow(
                                             prop:value=edit_location_id
                                             on:change=move |ev| set_edit_location_id.set(event_target_value(&ev))
                                         >
-                                            <option value="">"- None -"</option>
+                                            <option
+                                                value=""
+                                                selected=move || edit_location_id.get().is_empty()
+                                            >
+                                                "- None -"
+                                            </option>
                                             {locs
                                                 .iter()
                                                 .map(|loc| {
                                                     let val = loc.id.to_string();
+                                                    let sel_val = val.clone();
                                                     let name = loc.name.clone();
-                                                    view! { <option value=val>{name}</option> }
+                                                    view! {
+                                                        <option
+                                                            value=val
+                                                            selected=move || edit_location_id.get() == sel_val
+                                                        >
+                                                            {name}
+                                                        </option>
+                                                    }
                                                 })
                                                 .collect_view()}
                                         </select>

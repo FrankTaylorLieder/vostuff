@@ -1,5 +1,72 @@
 # VOStuff Project Journal
 
+## 2026-10-11 - Fix edit-item location dropdown and Type display name
+
+**Prompts:**
+
+1. What is left on the TODO list in TODO.md
+2. I've added two new todos. Can you fix item 8: edit location dropdown not displaying the current location
+3. Great. Can you fix the following item. (item 9: main summary list not showing the Display name of the Type)
+
+**Summary:**
+
+Listed the remaining open TODO items (production compose, identity/access token
+split, OIDC authn, plus the UI/importer backlog), then fixed "Other TODO items"
+item 8: the expanded item row's edit form always showed "- None -" in the
+Location dropdown regardless of the item's actual location.
+
+**Cause:** the `<select>` relied solely on `prop:value=edit_location_id`. The
+edit form is created client-side (inside a `<Show>`), so the `value` property is
+applied to the fresh `<select>` before its `<option>` children exist; the
+assignment finds no matching option and is discarded, leaving the first option
+("- None -") selected.
+
+**Fix** — mirror the working pattern already used in `components/pagination.rs`
+(reactive `selected` on each `<option>`):
+
+- `components/items_table.rs`: each location `<option>` now carries
+  `selected=move || edit_location_id.get() == sel_val`, and the "- None -"
+  option `selected=move || edit_location_id.get().is_empty()`. `prop:value` is
+  kept on the `<select>` so later signal changes (e.g. Cancel resetting the
+  form) still re-apply once the options are in the DOM.
+- `components/soft_field_helpers.rs`: the same defect affected enum soft-field
+  selects in the same form (they showed "- Select -" instead of the stored
+  value). Added a `selected_val` closure (field name held in `store_value` so
+  the closure is `Copy` and reusable per option) and reactive `selected` on each
+  option plus the "- Select -" placeholder.
+
+**Verification:** `cargo leptos build` succeeds for both the SSR binary and the
+wasm32 hydrate lib; `cargo clippy -p vostuff-web --features ssr` reports no new
+warnings; `cargo test -p vostuff-web -p vostuff-core` passes (4 tests). The
+`vostuff-api` integration tests remain uncompilable under `SQLX_OFFLINE=true`
+without a prepared query cache — pre-existing and unrelated to this change.
+
+**Item 9 — Type column showed the kind's internal name**
+
+The items list (and the expanded row's "Type" field) rendered `item.kind_name`,
+which the API populates from `kinds.name` (the slug, e.g. `vinyl`), so the kind's
+`display_name` (e.g. `Vinyl`) never appeared — even though the Type *filter*
+dropdown and the Add Item modal already used it.
+
+Fixed in the web tier, mirroring the existing `locations` map pattern rather
+than widening the API response:
+
+- `pages/home.rs`: builds `kind_name_map: HashMap<Uuid, String>` (`kind_id` →
+  `display_name` or `name`) from the already-fetched `kinds_resource`, and
+  passes it to `ItemsTable` as the new `kind_names` prop.
+- `components/items_table.rs`: `ItemsTable` gains the `kind_names` prop and
+  resolves `kind_label` per row (falling back to `item.kind_name` when the kind
+  is absent from the map); the Type column renders it and it is passed down to
+  `ItemExpandedRow` via a new `kind_label` prop for the edit form's Type row.
+
+No API, model or migration change was needed — the kinds list was already being
+fetched on this page for the filter dropdown.
+
+**Verification (both items):** `cargo leptos build` exits 0 for the SSR binary
+and the wasm32 hydrate lib; `cargo clippy -p vostuff-web --features ssr` shows
+no new warnings; `cargo test -p vostuff-web -p vostuff-core` passes; the changed
+regions are `rustfmt --edition 2024` clean.
+
 ## 2026-06-27 - Implement org/role authorization (authz)
 
 **Prompts:**

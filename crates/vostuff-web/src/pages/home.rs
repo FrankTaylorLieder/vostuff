@@ -221,6 +221,16 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                                         label: k.display_name.clone().unwrap_or_else(|| k.name.clone()),
                                     })
                                     .collect();
+                                // Build kind display-name map for the table's Type column
+                                let kind_name_map: HashMap<uuid::Uuid, String> = kinds
+                                    .iter()
+                                    .map(|k| {
+                                        (
+                                            k.id,
+                                            k.display_name.clone().unwrap_or_else(|| k.name.clone()),
+                                        )
+                                    })
+                                    .collect();
                                 let has_filters = !selected_types.get().is_empty()
                                     || !selected_states.get().is_empty()
                                     || !selected_locations.get().is_empty()
@@ -285,6 +295,7 @@ fn AuthenticatedHome(user_info: UserInfo) -> impl IntoView {
                                             <ItemsTable
                                                 items=paginated.items.clone()
                                                 locations=location_map
+                                                kind_names=kind_name_map
                                                 locations_list=locations.clone()
                                                 search_query=search_text.get()
                                                 sort_by=sort_by.get()
